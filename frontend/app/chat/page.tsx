@@ -99,12 +99,12 @@ export default function ChatPage() {
               source: "nessie" as const,
             })
           )
-          setConstraints(nessieConstraints)
+          setConstraints((prev) => (prev && prev.length > 0 ? prev : nessieConstraints))
 
           // Update categories from dashboard
           const dashCategories = dashboard.categoryBreakdown.map((c) => c.category)
           if (dashCategories.length > 0) {
-            setCategories([...new Set([...dashCategories, "Savings"])])
+            setCategories((prev) => (prev && prev.length > 0 ? prev : [...new Set([...dashCategories, "Savings"])]))
           }
         }
       } catch (err) {
@@ -151,8 +151,8 @@ export default function ChatPage() {
       if (res.new_constraints && res.new_constraints.length > 0) {
         setConstraints((prev) => [
           ...prev,
-          ...res.new_constraints.map((c) => ({
-            id: String(c.id || `ai-${Date.now()}`),
+          ...res.new_constraints.map((c, idx) => ({
+            id: String(c.id || `ai-${Date.now()}-${idx}`),
             category: String(c.category),
             operator: (c.operator as string) as "<=" | ">=" | "==",
             amount: Number(c.amount),

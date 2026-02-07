@@ -52,8 +52,6 @@ export function ConstraintEditor({
   onConstraintsChange,
   disabled = false,
 }: ConstraintEditorProps) {
-  const [newCategory, setNewCategory] = useState("")
-
   // Include categories from existing constraints (for AI-added ones)
   const allCategories = Array.from(
     new Set([
@@ -63,7 +61,7 @@ export function ConstraintEditor({
   )
 
   const addConstraint = () => {
-    const category = newCategory || categories[0] || "custom"
+    const category = categories[0] || "custom"
     onConstraintsChange([
       ...constraints,
       {
@@ -77,7 +75,6 @@ export function ConstraintEditor({
         source: "user",
       },
     ])
-    setNewCategory("")
   }
 
   const updateConstraint = (id: string, updates: Partial<UserConstraint>) => {
@@ -193,7 +190,7 @@ export function ConstraintEditor({
                     value={constraint.amount}
                     onChange={(e) =>
                       updateConstraint(constraint.id, {
-                        amount: parseInt(e.target.value) || 0,
+                        amount: parseFloat(e.target.value) || 0,
                       })
                     }
                     className="w-24"

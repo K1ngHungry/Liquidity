@@ -1,6 +1,6 @@
 create table if not exists public.nessie_customers (
   id uuid primary key default gen_random_uuid(),
-  auth_user_id uuid not null,
+  auth_user_id uuid not null references auth.users(id) on delete cascade,
   nessie_customer_id text not null unique,
   created_at timestamptz not null default now()
 );

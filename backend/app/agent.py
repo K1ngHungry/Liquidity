@@ -131,8 +131,12 @@ def add_user_constraint(constraint_json: str) -> str:
         Confirmation message.
     """
     import uuid
-    constraint = json.loads(constraint_json)
-    
+    try:
+        constraint = json.loads(constraint_json)
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.error("Agent failed to parse constraint JSON: %s. Error: %s", constraint_json, e)
+        return json.dumps({"status": "error", "message": "malformed constraint JSON", "details": str(e)})
+
     # Add unique ID and source
     constraint["id"] = f"ai-{uuid.uuid4().hex[:8]}"
     constraint["source"] = "ai"

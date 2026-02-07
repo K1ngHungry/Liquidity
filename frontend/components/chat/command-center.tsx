@@ -57,7 +57,7 @@ export function CommandCenter({
   onConstraintsChange,
 }: CommandCenterProps) {
   const hasResult = currentResult !== null
-  const hasComparison = previousResult !== null
+  const hasComparison = currentResult !== null && previousResult !== null
 
   const handleConstraintsChange = (editorConstraints: EditorConstraint[]) => {
     onConstraintsChange(editorConstraints.map(fromEditorConstraint))
