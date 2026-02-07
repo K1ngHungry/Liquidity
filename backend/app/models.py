@@ -38,6 +38,8 @@ class AgentResponse(BaseModel):
     type: str  # "question" or "solution"
     content: str
     solver_result: dict[str, Any] | None = None
+    solver_input: dict[str, Any] | None = None
+    recommendations: list[dict[str, str]] = []
     conversation: list[dict[str, Any]]
 
 

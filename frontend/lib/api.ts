@@ -132,10 +132,20 @@ export interface AgentRequest {
   conversation_history: Record<string, unknown>[];
 }
 
+export interface Recommendation {
+  label: string;
+  value: string;
+  threshold: string;
+  status: "good" | "warning" | "critical";
+  detail: string;
+}
+
 export interface AgentResponse {
   type: "question" | "solution";
   content: string;
   solver_result: Record<string, unknown> | null;
+  solver_input: Record<string, unknown> | null;
+  recommendations: Recommendation[];
   conversation: Record<string, unknown>[];
 }
 
@@ -195,13 +205,6 @@ class ApiClient {
     });
   }
 
-  async createUser(data: CreateUserRequest): Promise<CreateUserResponse> {
-    return this.request<CreateUserResponse>("/api/nessie/users/create", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  }
-
   async linkNessieCustomer(
     data: CreateUserRequest,
     accessToken: string,
@@ -215,6 +218,7 @@ class ApiClient {
     });
   }
 
+  
   async getNessieMapping(accessToken: string): Promise<NessieMappingResponse> {
     return this.request<NessieMappingResponse>("/api/nessie/me", {
       method: "GET",
@@ -224,11 +228,6 @@ class ApiClient {
     });
   }
 
-  async optimizeUser(userId: number): Promise<OptimizationResponse> {
-    return this.request<OptimizationResponse>(`/api/nessie/users/${userId}/optimize`, {
-      method: "POST",
-    });
-  }
 
   async optimizeCurrentUser(accessToken: string): Promise<OptimizationResponse> {
     return this.request<OptimizationResponse>("/api/nessie/optimize", {

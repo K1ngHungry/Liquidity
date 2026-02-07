@@ -65,6 +65,22 @@ Assign priorities based on how important the constraint seems to the user:
 - Priority 1: essential category limits (groceries, transport)
 - Priority 2: discretionary limits (dining, entertainment, shopping)
 - Priority 3 (lowest): nice-to-haves
+
+## Response format when a solution is found
+
+After calling the solver tool, read the solver's JSON result carefully. Your text MUST \
+match the solver output exactly — do NOT compute your own numbers.
+
+1. **Summary** (1-2 sentences): Describe the outcome using ONLY the values from the \
+solver result JSON (status, solution amounts, dropped constraints). Never do your own \
+arithmetic — the solver is the source of truth.
+2. **If the solver dropped any constraints**, explicitly name each dropped constraint \
+and explain what it means for the user. Then add a "Ways to Adjust" section with exactly \
+3 specific, creative suggestions for how the user can modify their situation to meet \
+their original goals.
+
+Keep the tone concise, friendly, and actionable. Do NOT repeat the full allocation \
+table or budget health metrics — the UI renders those automatically from solver data.
 """
 
 
@@ -133,6 +149,19 @@ def create_constraint_problem(problem_json: str) -> str:
     return json.dumps(result_dict)
 
 
+# --- Category classification for recommendations ---
+
+_HOUSING_KEYWORDS = {"mortgage", "rent", "housing"}
+_NEEDS_KEYWORDS = (
+    _HOUSING_KEYWORDS
+    | {"groceries", "utilities", "transportation", "insurance", "healthcare",
+       "car_payment", "bills", "childcare", "phone", "internet", "water",
+       "electric", "gas"}
+)
+_SAVINGS_KEYWORDS = {"savings", "emergency_fund", "investments", "retirement",
+                     "debt_payment"}
+
+
 class BudgetAgent:
     """Hybrid LLM agent: translates budget descriptions into solver JSON."""
 
@@ -189,13 +218,22 @@ class BudgetAgent:
 
         updated_conversation = self._sanitize_conversation(result.to_input_list())
 
+        # Try ContextVar first; fall back to extracting from conversation history
+        # (ContextVar may not propagate if the runner executes tools in a
+        # different async context or thread.)
         solver_result = _ctx_last_solver_result.get()
+        if solver_result is None:
+            solver_result = self._extract_solver_result(updated_conversation)
+
+        solver_input = self._extract_solver_input(updated_conversation)
 
         if solver_result is not None:
             return {
                 "type": "solution",
                 "content": result.final_output,
                 "solver_result": solver_result,
+                "solver_input": solver_input,
+                "recommendations": self._compute_recommendations(solver_result),
                 "conversation": updated_conversation,
             }
 
@@ -203,5 +241,150 @@ class BudgetAgent:
             "type": "question",
             "content": result.final_output,
             "solver_result": None,
+            "solver_input": None,
+            "recommendations": [],
             "conversation": updated_conversation,
         }
+
+    @staticmethod
+    def _extract_solver_result(
+        conversation: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        """Extract the last solver result from tool responses in the conversation."""
+        for msg in reversed(conversation):
+            if msg.get("role") == "tool":
+                try:
+                    content = msg.get("content")
+                    if isinstance(content, dict):
+                        data = content
+                    else:
+                        data = json.loads(content)
+                    if "solution" in data and "status" in data:
+                        return data
+                except (json.JSONDecodeError, KeyError):
+                    continue
+        return None
+
+    @staticmethod
+    def _extract_solver_input(
+        conversation: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        """Extract the constraint problem JSON that was passed to the solver."""
+        for msg in reversed(conversation):
+            tool_calls = msg.get("tool_calls")
+            if not tool_calls:
+                continue
+            for tc in tool_calls:
+                fn = tc.get("function", {})
+                if fn.get("name") == "create_constraint_problem":
+                    try:
+                        args = json.loads(fn.get("arguments", "{}"))
+                        problem_json = args.get("problem_json", "")
+                        return json.loads(problem_json)
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+        return None
+
+    @staticmethod
+    def _compute_recommendations(
+        solver_result: dict[str, Any],
+    ) -> list[dict[str, str]]:
+        """Compute math-backed budget health recommendations from solver output."""
+        solution = solver_result.get("solution", {})
+        total = sum(solution.values())
+        if total == 0:
+            return []
+
+        recs: list[dict[str, str]] = []
+
+        # Classify variables
+        housing_total = sum(v for k, v in solution.items() if k in _HOUSING_KEYWORDS)
+        needs_total = sum(v for k, v in solution.items() if k in _NEEDS_KEYWORDS)
+        savings_total = sum(v for k, v in solution.items() if k in _SAVINGS_KEYWORDS)
+        wants_total = total - needs_total - savings_total
+
+        # 1. Housing ratio (< 30% = good, 30-40% = warning, > 40% = critical)
+        if housing_total > 0:
+            housing_pct = housing_total / total * 100
+            if housing_pct <= 30:
+                status = "good"
+            elif housing_pct <= 40:
+                status = "warning"
+            else:
+                status = "critical"
+            recs.append({
+                "label": "Housing Ratio",
+                "value": f"{housing_pct:.1f}%",
+                "threshold": "< 30%",
+                "status": status,
+                "detail": (
+                    f"Housing is {housing_pct:.1f}% of your budget"
+                    f" (${housing_total:,} of ${total:,})."
+                ),
+            })
+
+        # 2. Savings rate (>= 20% = good, 10-20% = warning, < 10% = critical)
+        savings_pct = savings_total / total * 100
+        if savings_pct >= 20:
+            status = "good"
+        elif savings_pct >= 10:
+            status = "warning"
+        else:
+            status = "critical"
+        recs.append({
+            "label": "Savings Rate",
+            "value": f"{savings_pct:.1f}%",
+            "threshold": "\u2265 20%",
+            "status": status,
+            "detail": (
+                f"You're saving ${savings_total:,}/mo"
+                f" ({savings_pct:.1f}% of budget)."
+            ),
+        })
+
+        # 3. 50/30/20 split
+        needs_pct = needs_total / total * 100
+        wants_pct = wants_total / total * 100 if wants_total > 0 else 0.0
+        # Check deviation from ideal split
+        needs_ok = needs_pct <= 55  # some tolerance
+        wants_ok = wants_pct <= 35
+        savings_ok = savings_pct >= 18
+        if needs_ok and wants_ok and savings_ok:
+            status = "good"
+        elif not savings_ok or needs_pct > 65:
+            status = "critical"
+        else:
+            status = "warning"
+        recs.append({
+            "label": "50/30/20 Split",
+            "value": f"{needs_pct:.0f}/{wants_pct:.0f}/{savings_pct:.0f}",
+            "threshold": "50/30/20",
+            "status": status,
+            "detail": (
+                f"Needs {needs_pct:.0f}% / Wants {wants_pct:.0f}%"
+                f" / Savings {savings_pct:.0f}%."
+            ),
+        })
+
+        # 4. Emergency fund timeline (months to save 3× needs)
+        if savings_total > 0 and needs_total > 0:
+            target = needs_total * 3
+            months = target / savings_total
+            if months <= 6:
+                status = "good"
+            elif months <= 12:
+                status = "warning"
+            else:
+                status = "critical"
+            recs.append({
+                "label": "Emergency Fund",
+                "value": f"{months:.1f} mo",
+                "threshold": "\u2264 6 mo",
+                "status": status,
+                "detail": (
+                    f"At ${savings_total:,}/mo you'll reach a 3-month"
+                    f" emergency fund (${target:,}) in {months:.1f} months."
+                ),
+            })
+
+        return recs
