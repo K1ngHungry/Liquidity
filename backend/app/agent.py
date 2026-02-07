@@ -9,6 +9,7 @@ if ambiguous.
 
 import json
 import logging
+import re
 from contextvars import ContextVar
 from typing import Any
 
@@ -21,66 +22,42 @@ logger = logging.getLogger(__name__)
 # --- System prompt ---
 
 SYSTEM_PROMPT = """\
-You are a budget constraint assistant. Your job is to translate the user's \
-natural-language budget description into a structured constraint problem that \
-can be solved by an integer linear programming solver.
+You are a budget constraint assistant. Your ONLY job is to convert user requests \
+into constraints via the add_user_constraint tool. Be extremely brief.
 
-## How to think about the problem
+## Your workflow
 
-Each spending category the user mentions becomes a **variable** (integer, in whole dollars).
-User requirements become **constraints**:
-- **Hard constraints** MUST be satisfied (e.g., "rent is exactly $1500", "total cannot exceed income").
-- **Soft constraints** are preferences that the solver will TRY to satisfy, ranked by priority \
-(lower number = higher priority). If the problem is infeasible, the solver drops the \
-lowest-priority soft constraints first.
+1. User says something about money → call add_user_constraint immediately.
+2. Reply with ONE short sentence confirming what you added. Nothing else.
 
-If the user wants to optimize something (e.g., "maximize savings"), set that as the **objective**.
+## Constraint rules
 
-## Rules for expressions
+- category: lowercase, underscores, no spaces (e.g. dining_out, watch, groceries)
+- operator: "<=" (spending limit), ">=" (savings/purchase goal), "==" (fixed expense)
+- constraint_type: "hard" (firm) or "soft" (flexible). Use "hard" for purchases and \
+fixed expenses, "soft" for preferences ("try to", "ideally", "if possible").
+- priority: 0 = critical, 1 = high, 2 = medium, 3 = low, 4 = optional.
+  Savings/debt → 0. Essential limits → 1. Discretionary → 2. Nice-to-haves → 3.
 
-- Use only: +, -, *, <=, >=, ==
-- Variable names must be valid Python identifiers (lowercase, underscores, no spaces).
-  Examples: dining_out, groceries, car_payment
-- All values are integers (whole dollars).
-- Do NOT use division, modulo, or exponents.
-- For percentage-based rules, convert to absolute values. E.g., "save 20% of $5000 income" \
-becomes "savings >= 1000".
+## Examples
 
-## Interaction style
+User: "I want to buy a $2000 watch"
+→ Call add_user_constraint: category="watch", amount=2000, operator=">=", \
+constraint_type="hard", description="Purchase $2000 watch"
+→ Reply: "Added $2,000 watch goal."
 
-- If the user's message contains enough information (income, categories, constraints), \
-call the create_constraint_problem tool immediately.
-- If the message is ambiguous or missing critical info (like total income), ask a short \
-clarifying question. Keep follow-ups concise — at most 1-2 questions.
-- Always include a hard constraint that the sum of all category variables does not exceed \
-the total income/budget.
-- When the user mentions a fixed expense (rent, car payment), make it a hard equality constraint.
-- When the user says "ideally", "try to", "prefer", "if possible" — make it a soft constraint.
-- When the user gives a firm limit with no hedging — make it a hard constraint.
+User: "Try to keep dining under $300"
+→ Call add_user_constraint: category="dining", amount=300, operator="<=", \
+constraint_type="soft", priority=2, description="Limit dining to $300"
+→ Reply: "Added $300 dining limit (flexible)."
 
-## Priority guidelines for soft constraints
+## CRITICAL RULES
 
-Assign priorities based on how important the constraint seems to the user:
-- Priority 0 (highest): savings goals, debt payments
-- Priority 1: essential category limits (groceries, transport)
-- Priority 2: discretionary limits (dining, entertainment, shopping)
-- Priority 3 (lowest): nice-to-haves
-
-## Response format when a solution is found
-
-After calling the solver tool, read the solver's JSON result carefully. Your text MUST \
-match the solver output exactly — do NOT compute your own numbers.
-
-1. **Summary** (1-2 sentences): Describe the outcome using ONLY the values from the \
-solver result JSON (status, solution amounts, dropped constraints). Never do your own \
-arithmetic — the solver is the source of truth.
-2. **If the solver dropped any constraints**, explicitly name each dropped constraint \
-and explain what it means for the user. Then add a "Ways to Adjust" section with exactly \
-3 specific, creative suggestions for how the user can modify their situation to meet \
-their original goals.
-
-Keep the tone concise, friendly, and actionable. Do NOT repeat the full allocation \
-table or budget health metrics — the UI renders those automatically from solver data.
+- ALWAYS call add_user_constraint. Never just acknowledge in text without calling the tool.
+- Do NOT explain budgets, give financial advice, or summarize allocations.
+- Do NOT call create_constraint_problem — the UI handles solving separately.
+- Keep responses to 1 sentence max. The UI shows constraint details visually.
+- If the request is unclear, ask ONE short question. No more.
 """
 
 
@@ -91,6 +68,54 @@ table or budget health metrics — the UI renders those automatically from solve
 _ctx_last_solver_result: ContextVar[dict | None] = ContextVar(
     "_ctx_last_solver_result", default=None
 )
+_ctx_new_constraints: ContextVar[list[dict] | None] = ContextVar(
+    "_ctx_new_constraints", default=None
+)
+
+
+def add_user_constraint(constraint_json: str) -> str:
+    """Add a budget constraint based on user's purchase or spending goal.
+
+    Call this when the user mentions wanting to buy something or sets a spending goal.
+    Examples:
+    - "I want to buy a $2000 watch" -> add constraint for watch >= 2000
+    - "I need to save $500 for a trip" -> add constraint for trip >= 500
+    - "I want to limit dining to $300" -> add constraint for dining <= 300
+
+    Args:
+        constraint_json: A JSON string with the constraint details:
+            {
+                "category": "watch",  # lowercase, underscores for spaces
+                "operator": ">=",     # "<=", ">=", or "=="
+                "amount": 2000,       # dollar amount
+                "constraint_type": "hard",  # "hard" or "soft"
+                "priority": 1,        # 0-4, only for soft constraints
+                "description": "Purchase $2000 watch"  # human-readable
+            }
+
+    Returns:
+        Confirmation message.
+    """
+    import uuid
+    try:
+        constraint = json.loads(constraint_json)
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.error("Agent failed to parse constraint JSON: %s. Error: %s", constraint_json, e)
+        return json.dumps({"status": "error", "message": "malformed constraint JSON", "details": str(e)})
+
+    # Add unique ID and source
+    constraint["id"] = f"ai-{uuid.uuid4().hex[:8]}"
+    constraint["source"] = "ai"
+    
+    # Get current constraints and append
+    current = _ctx_new_constraints.get()
+    if current is None:
+        current = []
+    current.append(constraint)
+    _ctx_new_constraints.set(current)
+    
+    logger.info("Agent added constraint: %s", constraint)
+    return json.dumps({"status": "added", "constraint": constraint})
 
 
 def create_constraint_problem(problem_json: str) -> str:
@@ -179,10 +204,43 @@ class BudgetAgent:
         """
         return json.loads(json.dumps(raw, default=str))
 
+    @staticmethod
+    def _build_context_block(user_constraints: list[dict[str, Any]]) -> str:
+        """Build a context string describing the user's existing constraints."""
+        if not user_constraints:
+            return ""
+
+        lines = [
+            "\n\n## Current financial context (from bank data + user settings)",
+            "The user already has the following constraints set up in the UI. "
+            "You do NOT need to ask for this information — use it directly when "
+            "evaluating new requests.\n",
+        ]
+        for c in user_constraints:
+            cat = c.get("category", "unknown")
+            op = c.get("operator", "<=")
+            amt = c.get("amount", 0)
+            ctype = c.get("constraint_type", "soft")
+            priority = c.get("priority", 2)
+            desc = c.get("description", "")
+            source = c.get("source", "user")
+
+            source_label = {"nessie": "bank data", "ai": "AI suggested", "user": "user set"}.get(source, source)
+            type_label = "MUST" if ctype == "hard" else f"PREFER (priority {priority})"
+            lines.append(f"- {cat} {op} ${amt:,.0f}  [{type_label}] ({source_label}) {desc}")
+
+        lines.append(
+            "\nWhen the user asks to add a new goal or purchase, call "
+            "add_user_constraint immediately. Do NOT call create_constraint_problem. "
+            "The UI manages the solving process separate from your conversation."
+        )
+        return "\n".join(lines)
+
     async def run(
         self,
         user_message: str,
         conversation_history: list[dict[str, Any]] | None = None,
+        user_constraints: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """
         Process a user message through the agent.
@@ -199,13 +257,26 @@ class BudgetAgent:
 
         messages = list(conversation_history or [])
 
+        # Reset context variables for this request
+        _ctx_last_solver_result.set(None)
+        _ctx_new_constraints.set(None)
+
+        # Build system prompt with constraint context injected
+        prompt = SYSTEM_PROMPT
+        if user_constraints:
+            prompt += self._build_context_block(user_constraints)
+
         # Ensure system prompt is the first message
         if not messages or messages[0].get("role") != "system":
-            messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
+            messages.insert(0, {"role": "system", "content": prompt})
+        else:
+            # Update existing system prompt with fresh context
+            messages[0] = {"role": "system", "content": prompt}
 
         messages.append({"role": "user", "content": user_message})
 
         logger.info("Sending %d messages to Dedalus runner", len(messages))
+        logger.info("Available tools: %s", [add_user_constraint.__name__])
 
         # The DedalusRunner handles the full tool-calling loop automatically:
         # it calls the model, executes any tool the model invokes, feeds the
@@ -213,9 +284,10 @@ class BudgetAgent:
         result = await self.runner.run(
             messages=messages,
             model=self.model,
-            tools=[create_constraint_problem],
+            tools=[add_user_constraint],
         )
 
+        logger.info("New constraints after run: %s", _ctx_new_constraints.get())
         updated_conversation = self._sanitize_conversation(result.to_input_list())
 
         # Try ContextVar first; fall back to extracting from conversation history
@@ -226,6 +298,9 @@ class BudgetAgent:
             solver_result = self._extract_solver_result(updated_conversation)
 
         solver_input = self._extract_solver_input(updated_conversation)
+        new_constraints = self._extract_new_constraints(updated_conversation)
+        
+        logger.info("Extracted new_constraints from conversation: %s", new_constraints)
 
         if solver_result is not None:
             return {
@@ -234,6 +309,7 @@ class BudgetAgent:
                 "solver_result": solver_result,
                 "solver_input": solver_input,
                 "recommendations": self._compute_recommendations(solver_result),
+                "new_constraints": new_constraints,
                 "conversation": updated_conversation,
             }
 
@@ -243,7 +319,128 @@ class BudgetAgent:
             "solver_result": None,
             "solver_input": None,
             "recommendations": [],
+            "new_constraints": new_constraints,
             "conversation": updated_conversation,
+        }
+
+    @staticmethod
+    def _sanitize_name(raw: str) -> str:
+        """Turn an arbitrary string into a valid Python identifier for the solver."""
+        # Replace non-alphanumeric chars with underscores
+        name = re.sub(r"[^a-zA-Z0-9_]", "_", raw.lower().strip())
+        # Collapse multiple underscores
+        name = re.sub(r"_+", "_", name).strip("_")
+        # Prefix with underscore if it starts with a digit
+        if name and name[0].isdigit():
+            name = f"cat_{name}"
+        # Fallback for empty
+        if not name or not name.isidentifier():
+            name = "category"
+        return name
+
+    @staticmethod
+    def solve_direct(
+        user_constraints: list[dict[str, Any]],
+        objective_category: str = "savings",
+        objective_direction: str = "maximize",
+    ) -> dict[str, Any]:
+        """Solve directly from user constraints without LLM involvement.
+
+        Converts UI constraints to solver format and runs the solver.
+        Returns the same shape as a normal agent response.
+        """
+        # Sanitize and collect all unique categories, find the income ceiling
+        categories: set[str] = set()
+        income_amount = 0
+        # Map original category → sanitized name
+        cat_map: dict[str, str] = {}
+
+        for c in user_constraints:
+            raw_cat = c.get("category", "")
+            if raw_cat == "total_income":
+                income_amount = int(c.get("amount", 0))
+            else:
+                safe = BudgetAgent._sanitize_name(raw_cat)
+                cat_map[raw_cat] = safe
+                categories.add(safe)
+
+        # Ensure objective category exists
+        safe_objective = BudgetAgent._sanitize_name(objective_category)
+        if safe_objective and safe_objective not in categories:
+            categories.add(safe_objective)
+
+        upper = income_amount if income_amount > 0 else 100_000
+
+        # Build variables
+        variables = [
+            {"name": cat, "lower_bound": 0, "upper_bound": upper}
+            for cat in sorted(categories)
+        ]
+
+        # Build constraints
+        solver_constraints: list[dict[str, Any]] = []
+
+        # Income ceiling: sum of all categories <= income
+        if income_amount > 0 and categories:
+            expr = " + ".join(sorted(categories)) + f" <= {income_amount}"
+            solver_constraints.append({
+                "expression": expr,
+                "constraint_type": "hard",
+                "priority": 0,
+                "description": "Total allocation cannot exceed income",
+            })
+
+        # Convert each user constraint to a solver expression
+        for c in user_constraints:
+            raw_cat = c.get("category", "")
+            if raw_cat == "total_income":
+                continue  # already handled above
+            safe_cat = cat_map.get(raw_cat, BudgetAgent._sanitize_name(raw_cat))
+            op = c.get("operator", "<=")
+            amt = int(c.get("amount", 0))
+            ctype = c.get("constraint_type", "soft")
+            priority = int(c.get("priority", 2))
+            desc = c.get("description", "")
+
+            solver_constraints.append({
+                "expression": f"{safe_cat} {op} {amt}",
+                "constraint_type": ctype,
+                "priority": priority,
+                "description": desc or f"{safe_cat} {op} ${amt}",
+            })
+
+        # Build objective
+        objective = None
+        if safe_objective and safe_objective in categories:
+            objective = {
+                "expression": safe_objective,
+                "direction": objective_direction,
+            }
+
+        problem = {
+            "variables": variables,
+            "constraints": solver_constraints,
+            "objective": objective,
+        }
+
+        logger.info("Direct solve: %d vars, %d constraints, objective=%s",
+                     len(variables), len(solver_constraints), safe_objective)
+        logger.debug("Direct solve problem: %s", json.dumps(problem, indent=2))
+
+        solver_result = solve_from_json(problem)
+        result_dict = solver_result.model_dump()
+
+        if result_dict.get("status") == "ERROR":
+            logger.error("Solver returned ERROR for problem: %s", json.dumps(problem, indent=2))
+
+        return {
+            "type": "solution",
+            "content": "",
+            "solver_result": result_dict,
+            "solver_input": problem,
+            "recommendations": BudgetAgent._compute_recommendations(result_dict),
+            "new_constraints": [],
+            "conversation": [],
         }
 
     @staticmethod
@@ -284,6 +481,26 @@ class BudgetAgent:
                     except (json.JSONDecodeError, TypeError):
                         continue
         return None
+
+    @staticmethod
+    def _extract_new_constraints(
+        conversation: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Extract constraints added via add_user_constraint from tool responses."""
+        constraints = []
+        for msg in conversation:
+            if msg.get("role") == "tool":
+                try:
+                    content = msg.get("content")
+                    if isinstance(content, dict):
+                        data = content
+                    else:
+                        data = json.loads(content)
+                    if data.get("status") == "added" and "constraint" in data:
+                        constraints.append(data["constraint"])
+                except (json.JSONDecodeError, KeyError, TypeError):
+                    continue
+        return constraints
 
     @staticmethod
     def _compute_recommendations(

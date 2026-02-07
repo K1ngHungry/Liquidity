@@ -79,6 +79,7 @@ export interface DashboardTransaction {
   category: string;
   merchant: string;
   type: "debit" | "credit";
+  status: string;
 }
 
 export interface DashboardBudget {
@@ -111,6 +112,7 @@ export interface DashboardDemoFlags {
   summary: boolean;
   transactions: boolean;
   bills: boolean;
+  deposits: boolean;
   monthlySpending: boolean;
   categoryBreakdown: boolean;
   budgets: boolean;
@@ -121,15 +123,40 @@ export interface DashboardResponse {
   accounts: DashboardAccount[];
   transactions: DashboardTransaction[];
   bills: Record<string, unknown>[];
+  deposits: Record<string, unknown>[];
   monthlySpending: DashboardMonthlySpending[];
   categoryBreakdown: DashboardCategoryBreakdown[];
   budgets: DashboardBudget[];
   demoFlags: DashboardDemoFlags;
 }
 
+// User Constraint Types (Form-Based)
+export interface UserConstraint {
+  id: string;
+  category: string;
+  operator: "<=" | ">=" | "==";
+  amount: number;
+  constraint_type: "hard" | "soft";
+  priority: number; // 0-4
+  description: string;
+  source: "user" | "ai" | "nessie";
+}
+
+export interface UserPriority {
+  category: string;
+  priority: number; // 0-4
+}
+
 export interface AgentRequest {
   message: string;
   conversation_history: Record<string, unknown>[];
+  user_constraints?: UserConstraint[];
+}
+
+export interface DirectSolveRequest {
+  constraints: UserConstraint[];
+  objective_category?: string;
+  objective_direction?: string;
 }
 
 export interface Recommendation {
@@ -146,6 +173,7 @@ export interface AgentResponse {
   solver_result: Record<string, unknown> | null;
   solver_input: Record<string, unknown> | null;
   recommendations: Recommendation[];
+  new_constraints: Record<string, unknown>[];
   conversation: Record<string, unknown>[];
 }
 
@@ -205,6 +233,13 @@ class ApiClient {
     });
   }
 
+  async directSolve(req: DirectSolveRequest): Promise<AgentResponse> {
+    return this.request<AgentResponse>("/api/constraints/solve", {
+      method: "POST",
+      body: JSON.stringify(req),
+    });
+  }
+
   async linkNessieCustomer(
     data: CreateUserRequest,
     accessToken: string,
@@ -244,6 +279,21 @@ class ApiClient {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
+    });
+  }
+
+  async explainSolverResult(
+    solverResult: Record<string, unknown>,
+    userConstraints: UserConstraint[],
+    originalQuery: string
+  ): Promise<{ explanation: string }> {
+    return this.request<{ explanation: string }>("/api/agent/explain", {
+      method: "POST",
+      body: JSON.stringify({
+        solver_result: solverResult,
+        user_constraints: userConstraints,
+        original_query: originalQuery,
+      }),
     });
   }
 }

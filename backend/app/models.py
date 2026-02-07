@@ -30,9 +30,27 @@ class OptimizationResponse(BaseModel):
     nessie_data_summary: Dict[str, Any]
     constraints_generated: List[Dict[str, Any]]
 
+class UserConstraintInput(BaseModel):
+    id: str
+    category: str
+    operator: str  # "<=", ">=", "=="
+    amount: float
+    constraint_type: str  # "hard" or "soft"
+    priority: int = 2
+    description: str = ""
+    source: str = "user"  # "user", "ai", "nessie"
+
+
 class AgentRequest(BaseModel):
     message: str
     conversation_history: list[dict[str, Any]] = []
+    user_constraints: list[UserConstraintInput] = []
+
+
+class DirectSolveRequest(BaseModel):
+    constraints: list[UserConstraintInput]
+    objective_category: str = "savings"
+    objective_direction: str = "maximize"
 
 class AgentResponse(BaseModel):
     type: str  # "question" or "solution"
@@ -40,7 +58,18 @@ class AgentResponse(BaseModel):
     solver_result: dict[str, Any] | None = None
     solver_input: dict[str, Any] | None = None
     recommendations: list[dict[str, str]] = []
+    new_constraints: list[dict[str, Any]] = []  # Constraints to add to UI
     conversation: list[dict[str, Any]]
+
+
+class ExplainRequest(BaseModel):
+    solver_result: Dict[str, Any]
+    user_constraints: List[UserConstraintInput]
+    original_query: str = ""
+
+
+class ExplainResponse(BaseModel):
+    explanation: str
 
 
 class DashboardSummary(BaseModel):
@@ -59,6 +88,7 @@ class DashboardTransaction(BaseModel):
     category: str
     merchant: str
     type: str
+    status: str
 
 
 class DashboardBudget(BaseModel):
@@ -91,6 +121,7 @@ class DashboardDemoFlags(BaseModel):
     summary: bool
     transactions: bool
     bills: bool
+    deposits: bool
     monthlySpending: bool
     categoryBreakdown: bool
     budgets: bool
@@ -101,6 +132,7 @@ class DashboardResponse(BaseModel):
     accounts: list[DashboardAccount]
     transactions: list[DashboardTransaction]
     bills: list[dict[str, Any]]
+    deposits: list[dict[str, Any]]
     monthlySpending: list[DashboardMonthlySpending]
     categoryBreakdown: list[DashboardCategoryBreakdown]
     budgets: list[DashboardBudget]

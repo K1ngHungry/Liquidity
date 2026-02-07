@@ -10,41 +10,44 @@
 
 @layer base {
   :root {
-    --background: 209 97% 4%;
-    --foreground: 91 30% 90%;
-    --card: 209 60% 8%;
-    --card-foreground: 91 30% 90%;
-    --popover: 209 60% 8%;
-    --popover-foreground: 91 30% 90%;
-    --primary: 103 28% 67%;
-    --primary-foreground: 209 97% 6%;
-    --secondary: 212 16% 20%;
-    --secondary-foreground: 91 30% 85%;
-    --muted: 212 16% 20%;
-    --muted-foreground: 212 12% 45%;
-    --accent: 176 14% 57%;
-    --accent-foreground: 209 97% 6%;
-    --destructive: 0 50% 45%;
-    --destructive-foreground: 91 30% 90%;
-    --border: 212 18% 16%;
-    --input: 212 18% 16%;
-    --ring: 103 28% 67%;
-    --chart-1: 103 28% 67%;
-    --chart-2: 176 14% 57%;
-    --chart-3: 91 45% 75%;
-    --chart-4: 212 16% 33%;
-    --chart-5: 209 60% 11%;
-    --radius: 0.75rem;
-    --sidebar-background: 209 80% 6%;
-    --sidebar-foreground: 91 30% 85%;
-    --sidebar-primary: 103 28% 67%;
-    --sidebar-primary-foreground: 209 97% 6%;
-    --sidebar-accent: 212 16% 14%;
-    --sidebar-accent-foreground: 91 30% 90%;
-    --sidebar-border: 212 18% 16%;
-    --sidebar-ring: 103 28% 67%;
-    --success: 103 28% 67%;
-    --warning: 91 45% 75%;
+    --background: 0 0% 0%;
+    --foreground: 210 20% 98%;
+    --card: 215 15% 4%;
+    --card-foreground: 210 20% 98%;
+    --popover: 215 15% 4%;
+    --popover-foreground: 210 20% 98%;
+    --primary: 220 45% 42%;   /* Muted Professional Blue */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 225 15% 18%; /* Dark Slate */
+    --secondary-foreground: 210 40% 98%;
+    --muted: 215 15% 15%;
+    --muted-foreground: 215 15% 65%;
+    --accent: 210 40% 30%;   /* Desaturated Blue Accent */
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 50% 30%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 215 15% 18%;
+    --input: 215 15% 18%;
+    --ring: 220 45% 42%;
+    
+    /* Monochromatic Professional Charts */
+    --chart-1: 220 50% 40%; 
+    --chart-2: 215 35% 55%; 
+    --chart-3: 210 25% 65%; 
+    --chart-4: 210 20% 80%; 
+    --chart-5: 220 15% 25%;
+    
+    --radius: 0.5rem;
+    --sidebar-background: 215 15% 4%;
+    --sidebar-foreground: 210 20% 98%;
+    --sidebar-primary: 220 45% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 15% 12%; 
+    --sidebar-accent-foreground: 210 20% 98%;
+    --sidebar-border: 215 15% 18%;
+    --sidebar-ring: 220 45% 42%;
+    --success: 142 50% 40%;
+    --warning: 38 60% 50%;
   }
 }
 

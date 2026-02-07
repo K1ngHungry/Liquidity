@@ -9,26 +9,26 @@ export function CategoryBreakdown({ data }: { data?: DashboardCategoryBreakdown[
   const resolved = data && data.length > 0 ? data : getCategoryBreakdown()
 
   return (
-    <Card className="border-border bg-card">
+    <Card className="border-border bg-card h-full flex flex-col">
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-semibold text-foreground">
-          Spending by Category
+          Budget Tracking
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Where your money goes this month
+          Recurring Expenses
         </p>
       </CardHeader>
-      <CardContent>
-        <div className="flex flex-col items-center gap-4 lg:flex-row">
-          <div className="h-[220px] w-[220px] flex-shrink-0">
+      <CardContent className="flex-1">
+        <div className="flex flex-col items-center gap-6 h-full">
+          <div className="h-[250px] w-full flex-shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
                 <Pie
                   data={resolved}
                   cx="50%"
                   cy="50%"
-                  innerRadius={55}
-                  outerRadius={85}
+                  innerRadius={80}
+                  outerRadius={120}
                   paddingAngle={3}
                   dataKey="amount"
                   strokeWidth={0}
@@ -51,19 +51,19 @@ export function CategoryBreakdown({ data }: { data?: DashboardCategoryBreakdown[
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="flex flex-1 flex-col gap-2">
+          <div className="flex flex-1 flex-col justify-center gap-4 w-full">
             {resolved.map((item) => (
-              <div key={item.category} className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
+              <div key={item.category} className="flex items-center justify-between text-sm p-2 rounded-lg hover:bg-muted/50 transition-colors">
+                <div className="flex items-center gap-3">
                   <div
-                    className="h-2.5 w-2.5 rounded-full"
+                    className="h-3 w-3 rounded-full shadow-sm"
                     style={{ backgroundColor: item.color }}
                   />
-                  <span className="text-foreground">{item.category}</span>
+                  <span className="font-medium text-foreground">{item.category}</span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-muted-foreground">{item.percentage}%</span>
-                  <span className="font-medium text-foreground">${item.amount.toFixed(2)}</span>
+                <div className="flex items-center gap-4">
+                  <span className="text-muted-foreground text-xs">{item.percentage}%</span>
+                  <span className="font-semibold text-foreground">${item.amount.toFixed(2)}</span>
                 </div>
               </div>
             ))}

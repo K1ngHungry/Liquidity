@@ -12,17 +12,20 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+
 from app.agent import BudgetAgent
+from app.explainer_agent import ExplainerAgent
 from app.nessie_client import get_nessie_client, NessieClient, transform_nessie_to_constraints
 from app.supabase_client import get_supabase_client, require_auth_user_id
 from app.models import (
-    CreateUserRequest, 
- 
+    CreateUserRequest,
+
     OptimizationResponse,
     LinkNessieResponse,
     NessieMappingResponse,
     AgentRequest,
     AgentResponse,
+    DirectSolveRequest,
     DashboardResponse,
     DashboardSummary,
     DashboardTransaction,
@@ -31,6 +34,8 @@ from app.models import (
     DashboardCategoryBreakdown,
     DashboardAccount,
     DashboardDemoFlags,
+    ExplainRequest,
+    ExplainResponse,
 )
 from app.solver import solve_from_json
 
@@ -39,6 +44,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Liquidity API", version="1.0.0")
 
 budget_agent = BudgetAgent()
+explainer_agent = ExplainerAgent()
 
 # Configure CORS
 app.add_middleware(
@@ -167,15 +173,27 @@ def _build_dashboard_response(
     purchase_total = 0.0
 
     for purchase in purchases:
+        if purchase.get("status") == "cancelled":
+            continue
         amount = _safe_float(purchase.get("amount"))
-        purchase_total += amount
-        description = purchase.get("description") or "Purchase"
-        merchant = str(purchase.get("merchant_id") or purchase.get("merchant") or description)
-        category = purchase.get("category") or description
-        category_totals[category] = category_totals.get(category, 0.0) + amount
+        parsed_date = _parse_date(purchase.get("purchase_date") or purchase.get("created_at") or purchase.get("date"))
+        is_current_month = False
+        if parsed_date:
+            now = datetime.utcnow()
+            if parsed_date.year == now.year and parsed_date.month == now.month:
+                is_current_month = True
+
+        # We only want to track processed transactions in the transaction list, 
+        # but for "Spending by Category" we only want bills/recurring items as requested.
+        # So we SKIP adding standard one-off purchases to category_totals here.
+        pass
 
         purchase_date = purchase.get("purchase_date") or purchase.get("created_at") or purchase.get("date")
         date_str = purchase_date if isinstance(purchase_date, str) else ""
+
+        description = purchase.get("description") or "Purchase"
+        merchant = str(purchase.get("merchant_id") or purchase.get("merchant") or description)
+        category = purchase.get("category") or description
 
         transactions.append(
             DashboardTransaction(
@@ -186,6 +204,7 @@ def _build_dashboard_response(
                 category=category,
                 merchant=merchant,
                 type="debit",
+                status=str(purchase.get("status") or "posted"),
             )
         )
 
@@ -196,12 +215,23 @@ def _build_dashboard_response(
     monthly_spending_map = {(y, m): total_bills for (y, m, _) in month_labels}
 
     for purchase in purchases:
+        if purchase.get("status") == "cancelled":
+            continue
         parsed = _parse_date(purchase.get("purchase_date") or purchase.get("created_at") or purchase.get("date"))
         if not parsed:
             continue
         key = (parsed.year, parsed.month)
         if key in monthly_spending_map:
             monthly_spending_map[key] += _safe_float(purchase.get("amount"))
+
+    for bill in bills:
+        # Assuming get_account_bills returns active/recurring bills.
+        # We include them all as projecting "this month's" obligations.
+        amount = _safe_float(bill.get("payment_amount"))
+        
+        # Use payee or nickname for better categorization of bills
+        category = bill.get("payee") or bill.get("nickname") or "Bill"
+        category_totals[category] = category_totals.get(category, 0.0) + amount
 
     monthly_income_map = {(y, m): 0.0 for (y, m, _) in month_labels}
     for deposit in deposits:
@@ -211,6 +241,10 @@ def _build_dashboard_response(
         key = (parsed.year, parsed.month)
         if key in monthly_income_map:
             monthly_income_map[key] += _safe_float(deposit.get("amount"))
+        
+        # Also add income to category breakdown? Usually category breakdown is expenses.
+        # The user asked for "bills/recurring stuff that I will pay", so income might not be included in expenses breakdown.
+
 
     monthly_spending: list[DashboardMonthlySpending] = []
     for year, month, label in month_labels:
@@ -222,12 +256,15 @@ def _build_dashboard_response(
         )
 
     category_breakdown: list[DashboardCategoryBreakdown] = []
-    color_palette = ["#9FC490", "#82A3A1", "#C0DFA1", "#465362", "#6A8A88", "#B0D49A", "#5B7B79", "#3A4857"]
-    if purchase_total > 0:
+    color_palette = ["#336699", "#6688aa", "#8faabb", "#cddde8", "#36454f", "#4d73b3", "#506e95", "#4c5666"]
+    
+    total_spending_this_month = sum(category_totals.values())
+
+    if total_spending_this_month > 0:
         for idx, (category, amount) in enumerate(
             sorted(category_totals.items(), key=lambda item: item[1], reverse=True)
         ):
-            percentage = (amount / purchase_total) * 100
+            percentage = (amount / total_spending_this_month) * 100
             category_breakdown.append(
                 DashboardCategoryBreakdown(
                     category=category,
@@ -257,6 +294,7 @@ def _build_dashboard_response(
         summary=len(accounts) == 0,
         transactions=len(transactions) == 0,
         bills=len(bills) == 0,
+        deposits=len(deposits) == 0,
         monthlySpending=len(monthly_spending) == 0,
         categoryBreakdown=len(category_breakdown) == 0,
         budgets=True,
@@ -275,6 +313,7 @@ def _build_dashboard_response(
         ],
         transactions=transactions,
         bills=bills,
+        deposits=deposits,
         monthlySpending=monthly_spending,
         categoryBreakdown=category_breakdown,
         budgets=[],
@@ -476,13 +515,49 @@ async def agent_solve(req: AgentRequest):
     the dialogue.
     """
     try:
+        # Convert user constraints to plain dicts for the agent
+        constraints_dicts = [c.model_dump() for c in req.user_constraints] if req.user_constraints else None
+
         result = await budget_agent.run(
             user_message=req.message,
             conversation_history=req.conversation_history or None,
+            user_constraints=constraints_dicts,
         )
         return AgentResponse(**result)
     except Exception as e:
         logger.exception("agent_solve failed")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@app.post("/api/constraints/solve", response_model=AgentResponse)
+async def direct_solve(req: DirectSolveRequest):
+    """Solve directly from UI constraints without LLM involvement."""
+    try:
+        constraints_dicts = [c.model_dump() for c in req.constraints]
+        result = BudgetAgent.solve_direct(
+            user_constraints=constraints_dicts,
+            objective_category=req.objective_category,
+            objective_direction=req.objective_direction,
+        )
+        return AgentResponse(**result)
+    except Exception as e:
+        logger.exception("direct_solve failed")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@app.post("/api/agent/explain", response_model=ExplainResponse)
+async def agent_explain(req: ExplainRequest):
+    """Generate a natural language explanation for a solver result."""
+    try:
+        constraints_dicts = [c.model_dump() for c in req.user_constraints]
+        explanation = await explainer_agent.run(
+            solver_result=req.solver_result,
+            user_constraints=constraints_dicts,
+            original_query=req.original_query
+        )
+        return ExplainResponse(explanation=explanation)
+    except Exception as e:
+        logger.exception("agent_explain failed")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
