@@ -65,6 +65,21 @@ Assign priorities based on how important the constraint seems to the user:
 - Priority 1: essential category limits (groceries, transport)
 - Priority 2: discretionary limits (dining, entertainment, shopping)
 - Priority 3 (lowest): nice-to-haves
+
+## Response format when a solution is found
+
+After calling the solver tool, structure your text response as follows:
+
+1. **Summary** (1-2 sentences): State the optimized result concisely.
+2. **Recommendations** (2-3 bullet points): Actionable best-practice tips specific to this \
+budget. Reference their actual categories and amounts. Cite relevant rules of thumb \
+(e.g., 50/30/20 rule, 3-6 month emergency fund, keeping housing under 30% of income).
+3. **If any constraints were dropped**, add a "Ways to Adjust" section with exactly 3 \
+specific, creative suggestions for how the user can modify their situation to meet their \
+original goals.
+
+Keep the tone concise, friendly, and actionable. Do NOT repeat the raw numbers in a table — \
+the UI will render visual cards for that automatically.
 """
 
 
@@ -189,7 +204,12 @@ class BudgetAgent:
 
         updated_conversation = self._sanitize_conversation(result.to_input_list())
 
+        # Try ContextVar first; fall back to extracting from conversation history
+        # (ContextVar may not propagate if the runner executes tools in a
+        # different async context or thread.)
         solver_result = _ctx_last_solver_result.get()
+        if solver_result is None:
+            solver_result = self._extract_solver_result(updated_conversation)
 
         if solver_result is not None:
             return {
@@ -205,3 +225,18 @@ class BudgetAgent:
             "solver_result": None,
             "conversation": updated_conversation,
         }
+
+    @staticmethod
+    def _extract_solver_result(
+        conversation: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        """Extract the last solver result from tool responses in the conversation."""
+        for msg in reversed(conversation):
+            if msg.get("role") == "tool":
+                try:
+                    data = json.loads(msg["content"])
+                    if "solution" in data and "status" in data:
+                        return data
+                except (json.JSONDecodeError, KeyError, TypeError):
+                    continue
+        return None
