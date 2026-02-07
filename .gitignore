@@ -32,6 +32,10 @@ out/
 .env.development.local
 .env.test.local
 .env.production.local
+backend/.env*
+frontend/.env*
+!backend/.env.example
+!frontend/.env.example
 
 # IDEs
 .vscode/

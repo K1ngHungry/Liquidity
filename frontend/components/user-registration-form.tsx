@@ -1,14 +1,20 @@
 "use client"
 
 import { useState } from "react"
-import { apiClient } from "@/lib/api"
+import { apiClient, type LinkNessieResponse } from "@/lib/api"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Loader2 } from "lucide-react"
 
-export function UserRegistrationForm({ onRegisterSuccess }: { onRegisterSuccess: (userId: number) => void }) {
+export function UserRegistrationForm({
+  accessToken,
+  onRegisterSuccess,
+}: {
+  accessToken: string
+  onRegisterSuccess: (mapping: LinkNessieResponse) => void
+}) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -31,18 +37,21 @@ export function UserRegistrationForm({ onRegisterSuccess }: { onRegisterSuccess:
     setError(null)
 
     try {
-      const response = await apiClient.createUser({
-        first_name: formData.firstName,
-        last_name: formData.lastName,
-        address: {
-          street: formData.street,
-          city: formData.city,
-          state: formData.state,
-          zip: formData.zip,
+      const response = await apiClient.linkNessieCustomer(
+        {
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          address: {
+            street: formData.street,
+            city: formData.city,
+            state: formData.state,
+            zip: formData.zip,
+          },
         },
-      })
-      onRegisterSuccess(response.user_id)
-      console.log("User registered successfully")
+        accessToken,
+      )
+      onRegisterSuccess(response)
+      console.log("Nessie customer linked successfully")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to register")
     } finally {

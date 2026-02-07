@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from "react"
 import { Send, Bot, User, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { apiClient, AgentResponse } from "@/lib/api"
+import { apiClient, AgentResponse, Recommendation } from "@/lib/api"
 import { BudgetReport } from "@/components/chat/budget-report"
 
 const SUGGESTED_QUESTIONS = [
@@ -17,6 +17,7 @@ interface ChatMessage {
   role: "user" | "assistant"
   content: string
   solverResult?: Record<string, unknown> | null
+  recommendations?: Recommendation[]
 }
 
 export default function ChatPage() {
@@ -53,6 +54,13 @@ export default function ChatPage() {
         conversation_history: conversation,
       })
 
+      if (res.solver_input) {
+        console.log("[Solver Input]", res.solver_input)
+      }
+      if (res.solver_result) {
+        console.log("[Solver Result]", res.solver_result)
+      }
+
       setConversation(res.conversation)
       setMessages((prev) => [
         ...prev,
@@ -60,6 +68,7 @@ export default function ChatPage() {
           role: "assistant",
           content: res.content,
           solverResult: res.solver_result,
+          recommendations: res.recommendations,
         },
       ])
     } catch (err) {
@@ -154,7 +163,10 @@ export default function ChatPage() {
                     
                     {/* Render visual budget report if solver result present */}
                     {message.solverResult && (
-                      <BudgetReport result={message.solverResult} />
+                      <BudgetReport
+                        result={message.solverResult}
+                        recommendations={message.recommendations}
+                      />
                     )}
                   </div>
                 </div>

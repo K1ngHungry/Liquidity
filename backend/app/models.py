@@ -13,6 +13,18 @@ class CreateUserResponse(BaseModel):
     nessie_customer_id: str
     created_at: str
 
+
+class LinkNessieResponse(BaseModel):
+    auth_user_id: str
+    nessie_customer_id: str
+    created_at: str
+
+
+class NessieMappingResponse(BaseModel):
+    auth_user_id: str
+    nessie_customer_id: str
+    created_at: str
+
 class OptimizationResponse(BaseModel):
     solver_result: Dict[str, Any]
     nessie_data_summary: Dict[str, Any]
@@ -26,4 +38,6 @@ class AgentResponse(BaseModel):
     type: str  # "question" or "solution"
     content: str
     solver_result: dict[str, Any] | None = None
+    solver_input: dict[str, Any] | None = None
+    recommendations: list[dict[str, str]] = []
     conversation: list[dict[str, Any]]

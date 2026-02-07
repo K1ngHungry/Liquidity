@@ -39,6 +39,18 @@ export interface CreateUserResponse {
   created_at: string;
 }
 
+export interface LinkNessieResponse {
+  auth_user_id: string;
+  nessie_customer_id: string;
+  created_at: string;
+}
+
+export interface NessieMappingResponse {
+  auth_user_id: string;
+  nessie_customer_id: string;
+  created_at: string;
+}
+
 export interface OptimizationResponse {
   solver_result: {
     status: string;
@@ -56,10 +68,20 @@ export interface AgentRequest {
   conversation_history: Record<string, unknown>[];
 }
 
+export interface Recommendation {
+  label: string;
+  value: string;
+  threshold: string;
+  status: "good" | "warning" | "critical";
+  detail: string;
+}
+
 export interface AgentResponse {
   type: "question" | "solution";
   content: string;
   solver_result: Record<string, unknown> | null;
+  solver_input: Record<string, unknown> | null;
+  recommendations: Recommendation[];
   conversation: Record<string, unknown>[];
 }
 
@@ -126,9 +148,40 @@ class ApiClient {
     });
   }
 
+  async linkNessieCustomer(
+    data: CreateUserRequest,
+    accessToken: string,
+  ): Promise<LinkNessieResponse> {
+    return this.request<LinkNessieResponse>("/api/nessie/link", {
+      method: "POST",
+      body: JSON.stringify(data),
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+  }
+
+  async getNessieMapping(accessToken: string): Promise<NessieMappingResponse> {
+    return this.request<NessieMappingResponse>("/api/nessie/me", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+  }
+
   async optimizeUser(userId: number): Promise<OptimizationResponse> {
     return this.request<OptimizationResponse>(`/api/nessie/users/${userId}/optimize`, {
       method: "POST",
+    });
+  }
+
+  async optimizeCurrentUser(accessToken: string): Promise<OptimizationResponse> {
+    return this.request<OptimizationResponse>("/api/nessie/optimize", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
     });
   }
 }

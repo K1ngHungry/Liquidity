@@ -11,13 +11,16 @@ import {
 import {
   CheckCircle2,
   AlertTriangle,
+  XCircle,
   ChevronDown,
   ChevronUp,
   DollarSign,
   TrendingUp,
+  HeartPulse,
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
+import type { Recommendation } from "@/lib/api"
 
 const COLORS = [
   "#9FC490",
@@ -32,9 +35,10 @@ const COLORS = [
 
 interface BudgetReportProps {
   result: Record<string, unknown>
+  recommendations?: Recommendation[]
 }
 
-export function BudgetReport({ result }: BudgetReportProps) {
+export function BudgetReport({ result, recommendations }: BudgetReportProps) {
   const solution = result.solution as Record<string, number> | undefined
   const satisfied = result.satisfied_constraints as string[] | undefined
   const dropped = result.dropped_constraints as string[] | undefined
@@ -83,6 +87,11 @@ export function BudgetReport({ result }: BudgetReportProps) {
 
       {/* Allocation Bars */}
       {hasSolution && <AllocationBars entries={entries} total={total} />}
+
+      {/* Budget Health Recommendations */}
+      {recommendations && recommendations.length > 0 && (
+        <RecommendationsCard recommendations={recommendations} />
+      )}
 
       {/* Constraints */}
       <ConstraintsSection satisfied={satisfied} dropped={dropped} />
@@ -263,6 +272,70 @@ function AllocationBars({
             </div>
           )
         })}
+      </CardContent>
+    </Card>
+  )
+}
+
+function RecommendationsCard({
+  recommendations,
+}: {
+  recommendations: Recommendation[]
+}) {
+  return (
+    <Card className="border-border/50 bg-background/60">
+      <CardContent className="p-3">
+        <div className="mb-2 flex items-center gap-1.5">
+          <HeartPulse className="h-3.5 w-3.5 text-primary" />
+          <p className="text-xs font-medium text-muted-foreground">
+            Budget Health
+          </p>
+        </div>
+        <div className="space-y-2">
+          {recommendations.map((rec) => (
+            <div
+              key={rec.label}
+              className="flex items-start gap-2 rounded-md border border-border/50 bg-background/50 px-2.5 py-2"
+            >
+              <div className="mt-0.5 shrink-0">
+                {rec.status === "good" && (
+                  <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                )}
+                {rec.status === "warning" && (
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                )}
+                {rec.status === "critical" && (
+                  <XCircle className="h-3.5 w-3.5 text-red-500" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-foreground">
+                    {rec.label}
+                  </span>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span
+                      className={cn(
+                        "font-mono font-semibold",
+                        rec.status === "good" && "text-green-500",
+                        rec.status === "warning" && "text-amber-500",
+                        rec.status === "critical" && "text-red-500"
+                      )}
+                    >
+                      {rec.value}
+                    </span>
+                    <span className="text-muted-foreground">
+                      ({rec.threshold})
+                    </span>
+                  </div>
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {rec.detail}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
       </CardContent>
     </Card>
   )
