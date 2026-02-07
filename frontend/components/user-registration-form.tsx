@@ -42,7 +42,7 @@ export function UserRegistrationForm({ onRegisterSuccess }: { onRegisterSuccess:
         },
       })
       onRegisterSuccess(response.user_id)
-      console.log("User registered:", response)
+      console.log("User registered successfully")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to register")
     } finally {

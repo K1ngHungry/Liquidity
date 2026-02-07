@@ -76,7 +76,11 @@ export default function DashboardPage() {
         </Button>
       </div>
 
-      {optimizationResult && (
+      {optimizationResult && (() => {
+        const solver = optimizationResult?.solver_result ?? { solution: {}, dropped_constraints: [] }
+        const summary = optimizationResult?.nessie_data_summary ?? { total_balance: 0, total_bills: 0, total_bill_amount: 0 }
+
+        return (
         <Card className="bg-primary/5 border-primary/20">
           <CardHeader>
             <CardTitle className="text-primary flex items-center gap-2">
@@ -92,7 +96,7 @@ export default function DashboardPage() {
               <div>
                 <h4 className="font-medium mb-2">Recommended Allocation</h4>
                 <div className="space-y-1">
-                  {Object.entries(optimizationResult.solver_result.solution).map(([key, value]) => (
+                  {Object.entries(solver.solution || {}).map(([key, value]) => (
                     <div key={key} className="flex justify-between text-sm bg-background/50 p-2 rounded">
                       <span className="capitalize">{key.replace('_', ' ')}</span>
                       <span className="font-mono font-medium">${Number(value).toLocaleString()}</span>
@@ -104,18 +108,18 @@ export default function DashboardPage() {
                 <div>
                   <h4 className="font-medium mb-2">Summary</h4>
                   <ul className="text-sm space-y-1 text-muted-foreground">
-                    <li>Total Balance: ${optimizationResult.nessie_data_summary.total_balance.toLocaleString()}</li>
-                    <li>Bills Covered: {optimizationResult.nessie_data_summary.total_bills} (${optimizationResult.nessie_data_summary.total_bill_amount.toLocaleString()})</li>
+                    <li>Total Balance: ${summary.total_balance?.toLocaleString() ?? 0}</li>
+                    <li>Bills Covered: {summary.total_bills ?? 0} (${summary.total_bill_amount?.toLocaleString() ?? 0})</li>
                   </ul>
                 </div>
-                {optimizationResult.solver_result.dropped_constraints.length > 0 && (
+                {solver.dropped_constraints?.length > 0 && (
                   <div>
                     <h4 className="font-medium mb-2 text-amber-500">Adjustments Made</h4>
                     <p className="text-xs text-muted-foreground">
                       Some goals were adjusted to meet hard constraints:
                     </p>
                     <ul className="list-disc list-inside text-xs text-muted-foreground mt-1">
-                      {optimizationResult.solver_result.dropped_constraints.map((c: string, i: number) => (
+                      {solver.dropped_constraints.map((c: string, i: number) => (
                         <li key={i}>{c}</li>
                       ))}
                     </ul>
@@ -125,7 +129,8 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-      )}
+        )
+      })()}
 
       <StatCards />
 

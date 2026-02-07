@@ -2,6 +2,7 @@ import React from "react"
 import type { Metadata, Viewport } from "next"
 import { Inter, JetBrains_Mono } from "next/font/google"
 import { AppSidebar } from "@/components/app-sidebar"
+import { ThemeProvider } from "@/components/theme-provider"
 
 import "./globals.css"
 
@@ -31,7 +32,16 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         <div className="flex min-h-screen">
           <AppSidebar />
-          <main className="ml-64 flex-1 p-6 lg:p-8">{children}</main>
+          <main className="ml-64 flex-1 p-6 lg:p-8">
+             <ThemeProvider
+              attribute="class"
+              defaultTheme="system"
+              enableSystem
+              disableTransitionOnChange
+            >
+              {children}
+            </ThemeProvider>
+          </main>
         </div>
       </body>
     </html>

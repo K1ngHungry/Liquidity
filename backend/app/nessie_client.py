@@ -25,10 +25,22 @@ class NessieClient:
     ) -> Dict:
         """Create a new Nessie customer."""
         url = self._build_url("customers")
+        
+        # Split street address into number and name
+        street_parts = address.get("street", "").split(" ", 1)
+        street_number = street_parts[0] if street_parts else ""
+        street_name = street_parts[1] if len(street_parts) > 1 else ""
+
         payload = {
             "first_name": first_name,
             "last_name": last_name,
-            "address": address
+            "address": {
+                "street_number": street_number,
+                "street_name": street_name,
+                "city": address.get("city", ""),
+                "state": address.get("state", ""),
+                "zip": address.get("zip", "")
+            }
         }
         response = await self.client.post(url, json=payload)
         response.raise_for_status()
