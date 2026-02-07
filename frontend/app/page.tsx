@@ -167,6 +167,7 @@ export default function DashboardPage() {
     summary: true,
     transactions: true,
     bills: true,
+    deposits: true,
     monthlySpending: true,
     categoryBreakdown: true,
     budgets: true,

@@ -111,6 +111,7 @@ export interface DashboardDemoFlags {
   summary: boolean;
   transactions: boolean;
   bills: boolean;
+  deposits: boolean;
   monthlySpending: boolean;
   categoryBreakdown: boolean;
   budgets: boolean;
@@ -121,6 +122,7 @@ export interface DashboardResponse {
   accounts: DashboardAccount[];
   transactions: DashboardTransaction[];
   bills: Record<string, unknown>[];
+  deposits: Record<string, unknown>[];
   monthlySpending: DashboardMonthlySpending[];
   categoryBreakdown: DashboardCategoryBreakdown[];
   budgets: DashboardBudget[];

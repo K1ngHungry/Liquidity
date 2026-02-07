@@ -92,6 +92,7 @@ class DashboardDemoFlags(BaseModel):
     summary: bool
     transactions: bool
     bills: bool
+    deposits: bool
     monthlySpending: bool
     categoryBreakdown: bool
     budgets: bool
@@ -102,6 +103,7 @@ class DashboardResponse(BaseModel):
     accounts: list[DashboardAccount]
     transactions: list[DashboardTransaction]
     bills: list[dict[str, Any]]
+    deposits: list[dict[str, Any]]
     monthlySpending: list[DashboardMonthlySpending]
     categoryBreakdown: list[DashboardCategoryBreakdown]
     budgets: list[DashboardBudget]
