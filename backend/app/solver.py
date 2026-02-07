@@ -80,13 +80,16 @@ def safe_eval_ast(expression: str, variables: Dict[str, Any]) -> Any:
     def _eval(node):
         if isinstance(node, ast.Expression):
             return _eval(node.body)
-        elif isinstance(node, ast.Constant):  # Numbers only
+        elif isinstance(node, ast.Constant):  # Integer constants only
             # Explicitly reject bool (which is a subclass of int in Python)
             if isinstance(node.value, bool):
                 raise TypeError(f"Non-numeric literal: {node.value!r} (type: bool)")
-            # Accept only numeric types (int, float, complex)
-            if not isinstance(node.value, (int, float, complex)):
-                raise TypeError(f"Non-numeric literal: {node.value!r} (type: {type(node.value).__name__})")
+            # CP-SAT operates on integers — reject float and complex
+            if not isinstance(node.value, int):
+                raise TypeError(
+                    f"Only integer constants are supported for CP-SAT, "
+                    f"got {node.value!r} (type: {type(node.value).__name__})"
+                )
             return node.value
         elif isinstance(node, ast.Name):  # Variables
             if node.id in variables:
@@ -95,9 +98,17 @@ def safe_eval_ast(expression: str, variables: Dict[str, Any]) -> Any:
         elif isinstance(node, ast.BinOp):
             left = _eval(node.left)
             right = _eval(node.right)
-            if type(node.op) in ops:
-                return ops[type(node.op)](left, right)
-            raise ValueError(f"Unsupported operator: {type(node.op)}")
+            if type(node.op) not in ops:
+                raise ValueError(f"Unsupported operator: {type(node.op)}")
+            # CP-SAT requires linear expressions: multiplication must have
+            # at least one integer constant operand (no variable * variable).
+            if isinstance(node.op, ast.Mult):
+                if not (isinstance(left, int) or isinstance(right, int)):
+                    raise ValueError(
+                        "Non-linear multiplication: at least one operand must "
+                        "be an integer constant (variable * variable is not allowed)"
+                    )
+            return ops[type(node.op)](left, right)
         elif isinstance(node, ast.UnaryOp):
             operand = _eval(node.operand)
             if type(node.op) in ops:
@@ -143,6 +154,8 @@ class DynamicSolver:
         for var_def in request.variables:
             if not var_def.name.isidentifier():
                 raise ValueError(f"Invalid variable name: '{var_def.name}'.")
+            if var_def.name in self.vars:
+                raise ValueError(f"Duplicate variable name: '{var_def.name}'.")
             self.vars[var_def.name] = self.model.NewIntVar(
                 var_def.lower_bound, var_def.upper_bound, var_def.name
             )
@@ -194,19 +207,21 @@ class DynamicSolver:
                 logger.info(f"Dropping soft constraint (priority {removed.priority}): {removed.expression}")
 
             status_name = self.solver.StatusName(status)
+            feasible = status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+
             solution = {}
-            if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            satisfied: List[str] = []
+            if feasible:
                 for name, var in self.vars.items():
                     solution[name] = self.solver.Value(var)
-
-            satisfied = (
-                [c.description or c.expression for c in request.constraints if c.constraint_type == "hard"]
-                + [c.description or c.expression for c in active_soft]
-            )
+                satisfied = (
+                    [c.description or c.expression for c in request.constraints if c.constraint_type == "hard"]
+                    + [c.description or c.expression for c in active_soft]
+                )
 
             return SolverResponse(
                 status=status_name,
-                objective_value=self.solver.ObjectiveValue() if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else None,
+                objective_value=self.solver.ObjectiveValue() if feasible else None,
                 solution=solution,
                 wall_time=self.solver.WallTime(),
                 satisfied_constraints=satisfied,
@@ -229,19 +244,27 @@ def solve_from_json(json_data: Dict[str, Any]) -> SolverResponse:
 
     Args:
         json_data: Problem specification containing:
-            - variables: List of dicts with {name, lower_bound, upper_bound}
-            - constraints: List of string expressions (e.g., "2 * x + 7 * y <= 50")
-            - objective: Optional dict with {expression, direction} where direction is "maximize" or "minimize"
+            - variables: List of VariableDefinition dicts, each with:
+                - name (str): Valid Python identifier for the variable.
+                - lower_bound (int): Minimum integer value.
+                - upper_bound (int): Maximum integer value (must be >= lower_bound).
+            - constraints: List of ConstraintDefinition dicts, each with:
+                - expression (str): Math expression using variable names and
+                  comparators. Valid comparators: ``<=``, ``>=``, ``==``, ``<``,
+                  ``>``, ``!=``. Example: ``"2 * x + 7 * y <= 50"``.
+                - constraint_type (str): ``"hard"`` (must be satisfied) or
+                  ``"soft"`` (preference, may be dropped). Default ``"hard"``.
+                - priority (int): Priority tier for soft constraints; lower
+                  number = higher priority. Ignored for hard constraints.
+                  Default ``0``.
+                - description (str): Human-readable label. Default ``""``.
+            - objective: Optional ObjectiveDefinition dict with:
+                - expression (str): Expression to optimize (e.g. ``"savings"``).
+                - direction (str): ``"maximize"`` or ``"minimize"``.
 
     Returns:
-        SolverResponse with status, objective_value, solution dict, and wall_time
-
-    Example:
-        >>> solve_from_json({
-        ...     "variables": [{"name": "x", "lower_bound": 0, "upper_bound": 10}],
-        ...     "constraints": ["x >= 5"],
-        ...     "objective": {"expression": "x", "direction": "maximize"}
-        ... })
+        SolverResponse with status, objective_value, solution dict, wall_time,
+        satisfied_constraints, and dropped_constraints.
     """
     try:
         request = SolverRequest(**json_data)

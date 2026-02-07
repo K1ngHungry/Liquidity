@@ -10,7 +10,7 @@ Build an LLM agent (Anthropic Claude) that translates natural-language budget de
 
 - Cherry-pick or copy `backend/app/solver.py` into the current branch
 - Add `ortools` to `requirements.txt` (missing dependency)
-- Add `anthropic` to `requirements.txt`
+- Add `dedalus_labs` to `requirements.txt` (replaces direct `anthropic` SDK; Dedalus wraps Anthropic Claude)
 
 ## Step 2: Extend the solver schema for soft/hard priority tiers
 
@@ -40,9 +40,9 @@ Update `SolverRequest.constraints` from `List[str]` to `List[ConstraintDefinitio
 
 Core components:
 
-### 3a. Anthropic SDK setup
-- Initialize the Anthropic client
-- Use Claude with tool use (function calling)
+### 3a. Dedalus Labs SDK setup
+- Initialize the `AsyncDedalus` client and `DedalusRunner`
+- Use Claude via Dedalus with tool use (function calling)
 
 ### 3b. System prompt
 - Instruct Claude to act as a budget constraint translator
@@ -61,7 +61,7 @@ Define a single tool `create_constraint_problem` that the LLM calls with:
 ```
 
 ### 3d. Hybrid interaction flow
-```
+```text
 User input → LLM
   ├─ If clear enough → LLM calls create_constraint_problem tool → solve → return results
   └─ If ambiguous → LLM asks clarifying question → user responds → loop back
@@ -101,6 +101,6 @@ New endpoints:
 | `backend/app/solver.py` | Copy from branch + extend with priority tiers |
 | `backend/app/agent.py` | **New** — LLM agent logic |
 | `backend/app/main.py` | Add agent endpoint |
-| `backend/requirements.txt` | Add `ortools`, `anthropic` |
+| `backend/requirements.txt` | Add `ortools`, `dedalus_labs` |
 | `frontend/lib/api.ts` | Add agent API methods |
 | `frontend/app/page.tsx` | Add chat UI for the agent |

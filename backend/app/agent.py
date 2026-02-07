@@ -9,6 +9,7 @@ if ambiguous.
 
 import json
 import logging
+from contextvars import ContextVar
 from typing import Any
 
 from dedalus_labs import AsyncDedalus, DedalusRunner
@@ -69,8 +70,11 @@ Assign priorities based on how important the constraint seems to the user:
 
 # --- Tool function (Dedalus auto-extracts the schema from type hints + docstring) ---
 
-# Module-level holder so BudgetAgent can detect whether the solver was invoked.
-_last_solver_result: dict | None = None
+# Per-request holder so BudgetAgent can detect whether the solver was invoked.
+# ContextVar ensures each async request gets isolated state.
+_ctx_last_solver_result: ContextVar[dict | None] = ContextVar(
+    "_ctx_last_solver_result", default=None
+)
 
 
 def create_constraint_problem(problem_json: str) -> str:
@@ -110,15 +114,23 @@ def create_constraint_problem(problem_json: str) -> str:
         A JSON string with the solver results including status, solution,
         satisfied_constraints, and dropped_constraints.
     """
-    global _last_solver_result
-
     tool_input = json.loads(problem_json)
-    logger.info("Agent generated constraint JSON: %s", json.dumps(tool_input, indent=2))
+
+    # Log a redacted summary — never emit full budget values at INFO level.
+    summary = {
+        "variables_count": len(tool_input.get("variables", [])),
+        "variable_names": [v.get("name") for v in tool_input.get("variables", [])],
+        "constraints_count": len(tool_input.get("constraints", [])),
+        "has_objective": tool_input.get("objective") is not None,
+    }
+    logger.info("Agent constraint problem summary: %s", summary)
+    logger.debug("Full constraint JSON: %s", json.dumps(tool_input, indent=2))
 
     solver_result = solve_from_json(tool_input)
-    _last_solver_result = solver_result.model_dump()
+    result_dict = solver_result.model_dump()
+    _ctx_last_solver_result.set(result_dict)
 
-    return json.dumps(_last_solver_result)
+    return json.dumps(result_dict)
 
 
 class BudgetAgent:
@@ -154,8 +166,7 @@ class BudgetAgent:
                 "conversation": list,         # updated conversation history
             }
         """
-        global _last_solver_result
-        _last_solver_result = None
+        _ctx_last_solver_result.set(None)
 
         messages = list(conversation_history or [])
 
@@ -178,11 +189,13 @@ class BudgetAgent:
 
         updated_conversation = self._sanitize_conversation(result.to_input_list())
 
-        if _last_solver_result is not None:
+        solver_result = _ctx_last_solver_result.get()
+
+        if solver_result is not None:
             return {
                 "type": "solution",
                 "content": result.final_output,
-                "solver_result": _last_solver_result,
+                "solver_result": solver_result,
                 "conversation": updated_conversation,
             }
 

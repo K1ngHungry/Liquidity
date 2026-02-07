@@ -114,7 +114,7 @@ async def agent_solve(req: AgentRequest):
         return AgentResponse(**result)
     except Exception as e:
         logger.exception("agent_solve failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 if __name__ == "__main__":
