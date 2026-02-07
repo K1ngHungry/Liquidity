@@ -47,7 +47,7 @@ export default function DashboardPage() {
     return (
       <div className="flex flex-col gap-6 items-center justify-center min-h-[60vh]">
         <div className="text-center space-y-2 mb-8">
-          <h1 className="text-3xl font-bold text-foreground">Welcome to FinTrack</h1>
+          <h1 className="text-3xl font-bold text-foreground">Welcome to Liquidity</h1>
           <p className="text-muted-foreground max-w-md mx-auto">
             Connect your bank account to start optimizing your liquidity and achieving your financial goals.
           </p>

@@ -13,7 +13,7 @@ const _jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "FinTrack - Smart Budgeting",
+  title: "Liquidity - Budget Flow",
   description:
     "AI-powered financial dashboard for tracking spending, budgets, and financial reports.",
 }
