@@ -127,9 +127,32 @@ export interface DashboardResponse {
   demoFlags: DashboardDemoFlags;
 }
 
+// User Constraint Types (Form-Based)
+export interface UserConstraint {
+  id: string;
+  category: string;
+  operator: "<=" | ">=" | "==";
+  amount: number;
+  constraint_type: "hard" | "soft";
+  priority: number; // 0-4
+  description: string;
+  source: "user" | "ai" | "nessie";
+}
+
+export interface UserPriority {
+  category: string;
+  priority: number; // 0-4
+}
+
 export interface AgentRequest {
   message: string;
   conversation_history: Record<string, unknown>[];
+}
+
+export interface ContextualAgentRequest extends AgentRequest {
+  user_constraints?: UserConstraint[];
+  category_priorities?: UserPriority[];
+  nessie_context?: Record<string, unknown>;
 }
 
 export interface Recommendation {
@@ -146,6 +169,7 @@ export interface AgentResponse {
   solver_result: Record<string, unknown> | null;
   solver_input: Record<string, unknown> | null;
   recommendations: Recommendation[];
+  new_constraints: Record<string, unknown>[];
   conversation: Record<string, unknown>[];
 }
 

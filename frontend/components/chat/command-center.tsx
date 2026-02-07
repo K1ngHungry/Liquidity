@@ -1,8 +1,8 @@
 "use client"
 
-import { LayoutDashboard } from "lucide-react"
+import { LayoutDashboard, Settings2 } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import type { Recommendation } from "@/lib/api"
+import type { Recommendation, UserConstraint } from "@/lib/api"
 import {
   COLORS,
   StatusBanner,
@@ -13,23 +13,55 @@ import {
   ConstraintsSection,
 } from "@/components/chat/budget-report"
 import { ScenarioComparison } from "@/components/chat/scenario-comparison"
+import {
+  ConstraintEditor,
+  type UserConstraint as EditorConstraint,
+} from "@/components/chat/constraint-editor"
 
 interface CommandCenterProps {
   currentResult: Record<string, unknown> | null
   previousResult: Record<string, unknown> | null
   recommendations: Recommendation[]
+  constraints: UserConstraint[]
+  categories: string[]
+  onConstraintsChange: (constraints: UserConstraint[]) => void
+}
+
+// Map between API UserConstraint and Editor UserConstraint (camelCase)
+function toEditorConstraint(c: UserConstraint): EditorConstraint {
+  return {
+    ...c,
+    constraintType: c.constraint_type,
+  }
+}
+
+function fromEditorConstraint(c: EditorConstraint): UserConstraint {
+  return {
+    id: c.id,
+    category: c.category,
+    operator: c.operator,
+    amount: c.amount,
+    constraint_type: c.constraintType,
+    priority: c.priority,
+    description: c.description,
+    source: c.source,
+  }
 }
 
 export function CommandCenter({
   currentResult,
   previousResult,
   recommendations,
+  constraints,
+  categories,
+  onConstraintsChange,
 }: CommandCenterProps) {
-  if (!currentResult) {
-    return <CommandCenterEmpty />
-  }
-
+  const hasResult = currentResult !== null
   const hasComparison = previousResult !== null
+
+  const handleConstraintsChange = (editorConstraints: EditorConstraint[]) => {
+    onConstraintsChange(editorConstraints.map(fromEditorConstraint))
+  }
 
   return (
     <div className="h-full overflow-y-auto p-4">
@@ -41,37 +73,53 @@ export function CommandCenter({
           </h2>
         </div>
 
-        {hasComparison ? (
-          <Tabs defaultValue="current">
-            <TabsList>
-              <TabsTrigger value="current">Current Plan</TabsTrigger>
-              <TabsTrigger value="compare">Compare Changes</TabsTrigger>
-            </TabsList>
+        <Tabs defaultValue={hasResult ? "results" : "constraints"}>
+          <TabsList>
+            <TabsTrigger value="results">
+              {hasResult ? "Budget Plan" : "Results"}
+            </TabsTrigger>
+            <TabsTrigger value="constraints">
+              <Settings2 className="h-3 w-3 mr-1" />
+              Constraints
+            </TabsTrigger>
+            {hasComparison && (
+              <TabsTrigger value="compare">Compare</TabsTrigger>
+            )}
+          </TabsList>
 
-            <TabsContent value="current">
+          <TabsContent value="results" className="mt-3">
+            {hasResult ? (
               <CurrentResultView
                 result={currentResult}
                 recommendations={recommendations}
               />
-            </TabsContent>
+            ) : (
+              <CommandCenterEmpty />
+            )}
+          </TabsContent>
 
-            <TabsContent value="compare">
+          <TabsContent value="constraints" className="mt-3">
+            <ConstraintEditor
+              constraints={constraints.map(toEditorConstraint)}
+              categories={categories}
+              onConstraintsChange={handleConstraintsChange}
+            />
+          </TabsContent>
+
+          {hasComparison && (
+            <TabsContent value="compare" className="mt-3">
               <ScenarioComparison
-                previous={previousResult}
-                current={currentResult}
+                previous={previousResult!}
+                current={currentResult!}
               />
             </TabsContent>
-          </Tabs>
-        ) : (
-          <CurrentResultView
-            result={currentResult}
-            recommendations={recommendations}
-          />
-        )}
+          )}
+        </Tabs>
       </div>
     </div>
   )
 }
+
 
 function CurrentResultView({
   result,

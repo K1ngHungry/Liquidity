@@ -40,6 +40,7 @@ class AgentResponse(BaseModel):
     solver_result: dict[str, Any] | None = None
     solver_input: dict[str, Any] | None = None
     recommendations: list[dict[str, str]] = []
+    new_constraints: list[dict[str, Any]] = []  # Constraints to add to UI
     conversation: list[dict[str, Any]]
 
 
