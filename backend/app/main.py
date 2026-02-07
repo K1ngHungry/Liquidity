@@ -14,7 +14,13 @@ from sqlalchemy.orm import Session
 from app.agent import BudgetAgent
 from app.database import get_db, User
 from app.nessie_client import get_nessie_client, NessieClient, transform_nessie_to_constraints
-from app.models import CreateUserRequest, CreateUserResponse, OptimizationResponse
+from app.models import (
+    CreateUserRequest, 
+    CreateUserResponse, 
+    OptimizationResponse,
+    AgentRequest,
+    AgentResponse
+)
 from app.solver import solve_from_json
 
 logger = logging.getLogger(__name__)
@@ -213,16 +219,7 @@ async def get_items():
     }
 
 
-class AgentRequest(BaseModel):
-    message: str
-    conversation_history: list[dict[str, Any]] = []
 
-
-class AgentResponse(BaseModel):
-    type: str  # "question" or "solution"
-    content: str
-    solver_result: dict[str, Any] | None = None
-    conversation: list[dict[str, Any]]
 
 
 @app.post("/api/agent/solve", response_model=AgentResponse)

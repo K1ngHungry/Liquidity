@@ -17,3 +17,13 @@ class OptimizationResponse(BaseModel):
     solver_result: Dict[str, Any]
     nessie_data_summary: Dict[str, Any]
     constraints_generated: List[Dict[str, Any]]
+
+class AgentRequest(BaseModel):
+    message: str
+    conversation_history: list[dict[str, Any]] = []
+
+class AgentResponse(BaseModel):
+    type: str  # "question" or "solution"
+    content: str
+    solver_result: dict[str, Any] | None = None
+    conversation: list[dict[str, Any]]

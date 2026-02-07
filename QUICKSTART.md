@@ -14,11 +14,25 @@ This will:
 - Create a Python virtual environment
 - Install all FastAPI dependencies
 
+**Important**: You need to set your Nessie API key in the backend environment.
+Create a `.env` file in the `backend` directory:
+
+```bash
+NESSIE_API_KEY=your_api_key_here
+```
+
 ### Step 2: Install Frontend Dependencies
 
 ```bash
 cd frontend
-npm install
+npm install --legacy-peer-deps
+```
+
+**Important**: Ensure the frontend knows where the backend is running.
+Create or update `.env.local` in the `frontend` directory:
+
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
 ### Step 3: Start Both Servers
@@ -36,7 +50,8 @@ Terminal 1 (Backend):
 
 ```bash
 cd backend
-./start-backend.sh
+source venv/bin/activate
+uvicorn app.main:app --reload
 ```
 
 Terminal 2 (Frontend):
@@ -46,6 +61,12 @@ cd frontend
 npm run dev
 ```
 
+To stop all servers, run:
+
+```bash
+./stop-all.sh
+```
+
 ## 🌐 Access Your App
 
 Once both servers are running:
@@ -53,89 +74,49 @@ Once both servers are running:
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:8000
 - **API Documentation**: http://localhost:8000/docs (Interactive Swagger UI)
-- **Alternative Docs**: http://localhost:8000/redoc (ReDoc)
 
 ## ✨ What's Included
 
-The boilerplate comes with:
+The platform now features:
 
 ### Frontend (Next.js)
 
-- ✅ Beautiful, modern UI with gradient backgrounds
-- ✅ API health check display
-- ✅ Sample data fetching from backend
-- ✅ Item processing demonstration
+- ✅ **New User Integration**: Register and link your Nessie bank account
+- ✅ **Liquidity Optimization**: One-click budget optimization based on real banking data
+- ✅ **AI Financial Advisor**: Chat interface for personalized financial advice
+- ✅ Modern UI with specific dashboards and reports
 - ✅ Type-safe API client
-- ✅ Responsive design with Tailwind CSS
 
 ### Backend (FastAPI)
 
-- ✅ CORS configured for Next.js
-- ✅ Sample REST API endpoints
-- ✅ Request/Response models with Pydantic
-- ✅ Auto-generated API documentation
-- ✅ Health check endpoint
+- ✅ **Nessie Banking Integration**: Create customers, fetch accounts and bills
+- ✅ **Constraint Solver**: Optimized budget allocation using OR-Tools
+- ✅ **AI Agent**: LLM-powered agent for financial querying
+- ✅ REST API endpoints for user management and optimization
 
-## 📋 API Endpoints
+## 📋 Key API Endpoints
 
-| Method | Endpoint       | Description                         |
-| ------ | -------------- | ----------------------------------- |
-| GET    | `/`            | Root endpoint                       |
-| GET    | `/health`      | Health check                        |
-| GET    | `/api/hello`   | Sample hello message                |
-| GET    | `/api/items`   | Get list of items                   |
-| POST   | `/api/process` | Process an item (doubles its value) |
-
-## 🎨 Customization
-
-### Add a New API Endpoint
-
-1. Edit `backend/app/main.py`:
-
-```python
-@app.get("/api/your-endpoint")
-async def your_endpoint():
-    return {"data": "your data"}
-```
-
-2. Update `frontend/lib/api.ts`:
-
-```typescript
-async yourEndpoint() {
-  return this.request('/api/your-endpoint');
-}
-```
-
-3. Use in your React components:
-
-```typescript
-const data = await apiClient.yourEndpoint();
-```
-
-### Modify the Frontend
-
-- Main page: `frontend/app/page.tsx`
-- Global styles: `frontend/app/globals.css`
-- API client: `frontend/lib/api.ts`
+| Method | Endpoint                          | Description                             |
+| ------ | --------------------------------- | --------------------------------------- |
+| POST   | `/api/nessie/users/create`        | Register a new user and link to Nessie  |
+| POST   | `/api/nessie/users/{id}/optimize` | Run liquidity optimization for a user   |
+| POST   | `/api/agent/solve`                | Send messages to the AI financial agent |
+| GET    | `/health`                         | Health check                            |
 
 ## 🔧 Troubleshooting
 
 **Backend won't start?**
 
 - Make sure you ran `./setup.sh` first
-- Check that Python 3.8+ is installed: `python3 --version`
-- Verify virtual environment is activated: `source venv/bin/activate`
+- Check that `NESSIE_API_KEY` is set in `backend/.env`
+- Verify virtual environment is activated
+- Python 3.8+ required
 
 **Frontend shows API errors?**
 
 - Ensure backend is running on port 8000
-- Check CORS settings in `backend/app/main.py`
-- Verify `.env.local` has correct API URL
-
-**Port already in use?**
-
-- Backend: Change port in start command or `.env` file
-- Frontend: Use `npm run dev -- -p 3001` for a different port
+- Check `.env.local` has `NEXT_PUBLIC_API_URL=http://localhost:8000`
+- Check terminal output for any build errors
 
 ## 📦 Production Deployment
 
@@ -154,19 +135,3 @@ cd frontend
 npm run build
 npm start
 ```
-
-## 🎓 Next Steps
-
-1. **Integrate your solver**: Import and use your existing `src/solver` code in the FastAPI endpoints
-2. **Add database**: Install SQLAlchemy or your preferred ORM
-3. **Add authentication**: Implement JWT or OAuth
-4. **Deploy**: Use services like Vercel (frontend) and Railway/Render (backend)
-
-## 📚 Learn More
-
-- [Next.js Docs](https://nextjs.org/docs)
-- [FastAPI Docs](https://fastapi.tiangolo.com/)
-- [React Docs](https://react.dev/)
-- [Tailwind CSS](https://tailwindcss.com/docs)
-
-Happy coding! 🎉

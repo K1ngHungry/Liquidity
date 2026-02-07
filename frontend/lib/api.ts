@@ -22,6 +22,35 @@ export interface HealthResponse {
   message: string;
 }
 
+export interface CreateUserRequest {
+  first_name: string;
+  last_name: string;
+  address: {
+    street: string;
+    city: string;
+    state: string;
+    zip: string;
+  };
+}
+
+export interface CreateUserResponse {
+  user_id: number;
+  nessie_customer_id: string;
+  created_at: string;
+}
+
+export interface OptimizationResponse {
+  solver_result: {
+    status: string;
+    objective_value: number;
+    solution: Record<string, number>;
+    satisfied_constraints: string[];
+    dropped_constraints: string[];
+  };
+  nessie_data_summary: Record<string, unknown>;
+  constraints_generated: Record<string, unknown>[];
+}
+
 export interface AgentRequest {
   message: string;
   conversation_history: Record<string, unknown>[];
@@ -87,6 +116,19 @@ class ApiClient {
     return this.request<AgentResponse>("/api/agent/solve", {
       method: "POST",
       body: JSON.stringify(req),
+    });
+  }
+
+  async createUser(data: CreateUserRequest): Promise<CreateUserResponse> {
+    return this.request<CreateUserResponse>("/api/nessie/users/create", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async optimizeUser(userId: number): Promise<OptimizationResponse> {
+    return this.request<OptimizationResponse>(`/api/nessie/users/${userId}/optimize`, {
+      method: "POST",
     });
   }
 }

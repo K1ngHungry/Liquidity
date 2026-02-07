@@ -1,26 +1,58 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  :root {
+    --background: 209 97% 4%;
+    --foreground: 91 30% 90%;
+    --card: 209 60% 8%;
+    --card-foreground: 91 30% 90%;
+    --popover: 209 60% 8%;
+    --popover-foreground: 91 30% 90%;
+    --primary: 103 28% 67%;
+    --primary-foreground: 209 97% 6%;
+    --secondary: 212 16% 20%;
+    --secondary-foreground: 91 30% 85%;
+    --muted: 212 16% 20%;
+    --muted-foreground: 212 12% 45%;
+    --accent: 176 14% 57%;
+    --accent-foreground: 209 97% 6%;
+    --destructive: 0 50% 45%;
+    --destructive-foreground: 91 30% 90%;
+    --border: 212 18% 16%;
+    --input: 212 18% 16%;
+    --ring: 103 28% 67%;
+    --chart-1: 103 28% 67%;
+    --chart-2: 176 14% 57%;
+    --chart-3: 91 45% 75%;
+    --chart-4: 212 16% 33%;
+    --chart-5: 209 60% 11%;
+    --radius: 0.75rem;
+    --sidebar-background: 209 80% 6%;
+    --sidebar-foreground: 91 30% 85%;
+    --sidebar-primary: 103 28% 67%;
+    --sidebar-primary-foreground: 209 97% 6%;
+    --sidebar-accent: 212 16% 14%;
+    --sidebar-accent-foreground: 91 30% 90%;
+    --sidebar-border: 212 18% 16%;
+    --sidebar-ring: 103 28% 67%;
+    --success: 103 28% 67%;
+    --warning: 91 45% 75%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }

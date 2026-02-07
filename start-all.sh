@@ -40,8 +40,13 @@ cd ..
 sleep 2
 
 # Start frontend
-echo -e "${GREEN}Starting Frontend (Next.js)...${NC}"
 cd frontend
+if [ ! -d "node_modules" ]; then
+    echo -e "${RED}Frontend dependencies not found!${NC}"
+    echo -e "${YELLOW}Please run: cd frontend && npm install${NC}"
+    exit 1
+fi
+echo -e "${GREEN}Starting Frontend (Next.js)...${NC}"
 npm run dev &
 FRONTEND_PID=$!
 cd ..
