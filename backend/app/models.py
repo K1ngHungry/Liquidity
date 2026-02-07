@@ -13,6 +13,18 @@ class CreateUserResponse(BaseModel):
     nessie_customer_id: str
     created_at: str
 
+
+class LinkNessieResponse(BaseModel):
+    auth_user_id: str
+    nessie_customer_id: str
+    created_at: str
+
+
+class NessieMappingResponse(BaseModel):
+    auth_user_id: str
+    nessie_customer_id: str
+    created_at: str
+
 class OptimizationResponse(BaseModel):
     solver_result: Dict[str, Any]
     nessie_data_summary: Dict[str, Any]

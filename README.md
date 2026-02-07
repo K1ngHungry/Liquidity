@@ -156,12 +156,18 @@ API_HOST=0.0.0.0
 API_PORT=8000
 DEBUG=True
 CORS_ORIGINS=http://localhost:3000
+NESSIE_API_KEY=your_nessie_api_key
+DEDALUS_API_KEY=your_dedalus_api_key
+SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ```
 
 ### Frontend (.env.local)
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 ## 🧪 Testing

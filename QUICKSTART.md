@@ -14,11 +14,19 @@ This will:
 - Create a Python virtual environment
 - Install all FastAPI dependencies
 
-**Important**: You need to set your Nessie API key in the backend environment.
-Create a `.env` file in the `backend` directory:
+**Important**: Copy the example env file and fill in your API keys:
 
 ```bash
-NESSIE_API_KEY=your_api_key_here
+cp .env.example .env
+```
+
+Then edit `backend/.env` and set:
+
+```bash
+NESSIE_API_KEY=your_api_key_here       # Required - get one at http://api.nessieisreal.com
+DEDALUS_API_KEY=your_dedalus_key_here  # Required for LLM agent
+SUPABASE_URL=your_supabase_url         # Required for Nessie customer mapping
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key  # Required for server-side Supabase access
 ```
 
 ### Step 2: Install Frontend Dependencies
@@ -33,18 +41,13 @@ Create or update `.env.local` in the `frontend` directory:
 
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 ### Step 3: Start Both Servers
 
-**Option A: Start everything at once (Recommended)**
-
-```bash
-# From the root directory
-./start-all.sh
-```
-
-**Option B: Start separately in two terminals**
+Open two terminals:
 
 Terminal 1 (Backend):
 
@@ -59,12 +62,6 @@ Terminal 2 (Frontend):
 ```bash
 cd frontend
 npm run dev
-```
-
-To stop all servers, run:
-
-```bash
-./stop-all.sh
 ```
 
 ## 🌐 Access Your App

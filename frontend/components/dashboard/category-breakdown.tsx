@@ -19,9 +19,9 @@ export function CategoryBreakdown() {
       </CardHeader>
       <CardContent>
         <div className="flex flex-col items-center gap-4 lg:flex-row">
-          <div className="h-[200px] w-[200px]">
+          <div className="h-[220px] w-[220px] flex-shrink-0">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
+              <PieChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
                 <Pie
                   data={data}
                   cx="50%"
@@ -43,6 +43,8 @@ export function CategoryBreakdown() {
                     borderRadius: "8px",
                     color: "hsl(91, 30%, 90%)",
                   }}
+                  itemStyle={{ color: "hsl(91, 30%, 90%)" }}
+                  labelStyle={{ color: "hsl(91, 30%, 90%)" }}
                   formatter={(value: number) => [`$${value.toFixed(2)}`, "Amount"]}
                 />
               </PieChart>
