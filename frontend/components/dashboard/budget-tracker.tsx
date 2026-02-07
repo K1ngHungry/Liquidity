@@ -2,9 +2,10 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { getBudgets } from "@/lib/data"
+import type { DashboardBudget } from "@/lib/api"
 
-export function BudgetTracker() {
-  const budgets = getBudgets()
+export function BudgetTracker({ budgets }: { budgets?: DashboardBudget[] }) {
+  const resolved = budgets && budgets.length > 0 ? budgets : getBudgets()
 
   return (
     <Card className="border-border bg-card">
@@ -18,7 +19,7 @@ export function BudgetTracker() {
       </CardHeader>
       <CardContent>
         <div className="flex flex-col gap-4">
-          {budgets.map((budget) => {
+          {resolved.map((budget) => {
             const percentage = Math.min((budget.spent / budget.limit) * 100, 100)
             const isOver = budget.spent > budget.limit
             return (

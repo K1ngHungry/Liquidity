@@ -3,9 +3,10 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { getCategoryBreakdown } from "@/lib/data"
+import type { DashboardCategoryBreakdown } from "@/lib/api"
 
-export function CategoryBreakdown() {
-  const data = getCategoryBreakdown()
+export function CategoryBreakdown({ data }: { data?: DashboardCategoryBreakdown[] }) {
+  const resolved = data && data.length > 0 ? data : getCategoryBreakdown()
 
   return (
     <Card className="border-border bg-card">
@@ -23,7 +24,7 @@ export function CategoryBreakdown() {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
                 <Pie
-                  data={data}
+                  data={resolved}
                   cx="50%"
                   cy="50%"
                   innerRadius={55}
@@ -32,7 +33,7 @@ export function CategoryBreakdown() {
                   dataKey="amount"
                   strokeWidth={0}
                 >
-                  {data.map((entry) => (
+                  {resolved.map((entry) => (
                     <Cell key={entry.category} fill={entry.color} />
                   ))}
                 </Pie>
@@ -51,7 +52,7 @@ export function CategoryBreakdown() {
             </ResponsiveContainer>
           </div>
           <div className="flex flex-1 flex-col gap-2">
-            {data.map((item) => (
+            {resolved.map((item) => (
               <div key={item.category} className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
                   <div

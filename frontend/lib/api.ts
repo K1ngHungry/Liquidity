@@ -63,6 +63,70 @@ export interface OptimizationResponse {
   constraints_generated: Record<string, unknown>[];
 }
 
+export interface DashboardSummary {
+  totalBalance: number;
+  monthlyIncome: number;
+  monthlyExpenses: number;
+  savingsRate: number;
+  monthOverMonth: number;
+}
+
+export interface DashboardTransaction {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  category: string;
+  merchant: string;
+  type: "debit" | "credit";
+}
+
+export interface DashboardBudget {
+  category: string;
+  limit: number;
+  spent: number;
+  color: string;
+}
+
+export interface DashboardMonthlySpending {
+  month: string;
+  amount: number;
+}
+
+export interface DashboardCategoryBreakdown {
+  category: string;
+  amount: number;
+  percentage: number;
+  color: string;
+}
+
+export interface DashboardAccount {
+  id: string;
+  type?: string | null;
+  nickname?: string | null;
+  balance?: number | null;
+}
+
+export interface DashboardDemoFlags {
+  summary: boolean;
+  transactions: boolean;
+  bills: boolean;
+  monthlySpending: boolean;
+  categoryBreakdown: boolean;
+  budgets: boolean;
+}
+
+export interface DashboardResponse {
+  summary: DashboardSummary;
+  accounts: DashboardAccount[];
+  transactions: DashboardTransaction[];
+  bills: Record<string, unknown>[];
+  monthlySpending: DashboardMonthlySpending[];
+  categoryBreakdown: DashboardCategoryBreakdown[];
+  budgets: DashboardBudget[];
+  demoFlags: DashboardDemoFlags;
+}
+
 export interface AgentRequest {
   message: string;
   conversation_history: Record<string, unknown>[];
@@ -169,6 +233,15 @@ class ApiClient {
   async optimizeCurrentUser(accessToken: string): Promise<OptimizationResponse> {
     return this.request<OptimizationResponse>("/api/nessie/optimize", {
       method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+  }
+
+  async getNessieDashboard(accessToken: string): Promise<DashboardResponse> {
+    return this.request<DashboardResponse>("/api/nessie/dashboard", {
+      method: "GET",
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },

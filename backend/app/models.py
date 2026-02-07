@@ -39,3 +39,67 @@ class AgentResponse(BaseModel):
     content: str
     solver_result: dict[str, Any] | None = None
     conversation: list[dict[str, Any]]
+
+
+class DashboardSummary(BaseModel):
+    totalBalance: float
+    monthlyIncome: float
+    monthlyExpenses: float
+    savingsRate: float
+    monthOverMonth: float
+
+
+class DashboardTransaction(BaseModel):
+    id: str
+    date: str
+    description: str
+    amount: float
+    category: str
+    merchant: str
+    type: str
+
+
+class DashboardBudget(BaseModel):
+    category: str
+    limit: float
+    spent: float
+    color: str
+
+
+class DashboardMonthlySpending(BaseModel):
+    month: str
+    amount: float
+
+
+class DashboardCategoryBreakdown(BaseModel):
+    category: str
+    amount: float
+    percentage: float
+    color: str
+
+
+class DashboardAccount(BaseModel):
+    id: str
+    type: str | None = None
+    nickname: str | None = None
+    balance: float | None = None
+
+
+class DashboardDemoFlags(BaseModel):
+    summary: bool
+    transactions: bool
+    bills: bool
+    monthlySpending: bool
+    categoryBreakdown: bool
+    budgets: bool
+
+
+class DashboardResponse(BaseModel):
+    summary: DashboardSummary
+    accounts: list[DashboardAccount]
+    transactions: list[DashboardTransaction]
+    bills: list[dict[str, Any]]
+    monthlySpending: list[DashboardMonthlySpending]
+    categoryBreakdown: list[DashboardCategoryBreakdown]
+    budgets: list[DashboardBudget]
+    demoFlags: DashboardDemoFlags
