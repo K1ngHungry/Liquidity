@@ -77,35 +77,82 @@ export default function ChatPage() {
       .catch((err) => console.error("API Health check failed", err))
   }, [])
 
-  // Fetch Nessie dashboard and populate initial constraints
+  // Fetch Nessie dashboard and populate initial constraints from bills + deposits
   useEffect(() => {
     const loadDashboardConstraints = async () => {
       if (!session?.access_token) return
-      
+
       try {
         const dashboard = await apiClient.getNessieDashboard(session.access_token)
-        
-        // Generate constraints from category breakdown
-        if (dashboard.categoryBreakdown && dashboard.categoryBreakdown.length > 0) {
-          const nessieConstraints: UserConstraint[] = dashboard.categoryBreakdown.map(
-            (cat, idx) => ({
-              id: `nessie-${idx}`,
-              category: cat.category.toLowerCase().replace(/\s+/g, "_"),
-              operator: "<=" as const,
-              amount: Math.round(cat.amount * 1.2), // 120% of historical
-              constraint_type: "soft" as const,
-              priority: 2,
-              description: `${cat.category} (historical: $${Math.round(cat.amount)})`,
+        const nessieConstraints: UserConstraint[] = []
+
+        // Bills → hard constraints (recurring expenses you must pay)
+        if (dashboard.bills && dashboard.bills.length > 0) {
+          dashboard.bills.forEach((bill, idx) => {
+            const payee = String(bill.payee || bill.nickname || `bill_${idx + 1}`)
+            const amount = Math.round(Number(bill.payment_amount || 0))
+            if (amount <= 0) return
+
+            nessieConstraints.push({
+              id: `nessie-bill-${idx}`,
+              category: payee.toLowerCase().replace(/\s+/g, "_"),
+              operator: "==" as const,
+              amount,
+              constraint_type: "hard" as const,
+              priority: 0,
+              description: `${payee} — $${amount}/mo (recurring bill)`,
               source: "nessie" as const,
             })
-          )
-          setConstraints((prev) => (prev && prev.length > 0 ? prev : nessieConstraints))
+          })
+        }
 
-          // Update categories from dashboard
-          const dashCategories = dashboard.categoryBreakdown.map((c) => c.category)
-          if (dashCategories.length > 0) {
-            setCategories((prev) => (prev && prev.length > 0 ? prev : [...new Set([...dashCategories, "Savings"])]))
+        // Deposits → income ceiling + savings goal
+        if (dashboard.deposits && dashboard.deposits.length > 0) {
+          const totalIncome = dashboard.deposits.reduce(
+            (sum, dep) => sum + Math.round(Number(dep.amount || 0)),
+            0,
+          )
+
+          if (totalIncome > 0) {
+            // Income ceiling — informational context for the solver
+            nessieConstraints.push({
+              id: "nessie-income",
+              category: "total_income",
+              operator: "<=" as const,
+              amount: totalIncome,
+              constraint_type: "hard" as const,
+              priority: 0,
+              description: `Monthly income — $${totalIncome.toLocaleString()} (from deposits)`,
+              source: "nessie" as const,
+            })
+
+            // Savings goal — soft constraint at 20% of income
+            const savingsGoal = Math.round(totalIncome * 0.2)
+            nessieConstraints.push({
+              id: "nessie-savings-goal",
+              category: "savings",
+              operator: ">=" as const,
+              amount: savingsGoal,
+              constraint_type: "soft" as const,
+              priority: 0,
+              description: `Save at least 20% of income ($${savingsGoal.toLocaleString()})`,
+              source: "nessie" as const,
+            })
           }
+        }
+
+        if (nessieConstraints.length > 0) {
+          setConstraints((prev) => (prev.length > 0 ? prev : nessieConstraints))
+
+          // Build categories from bill payees + defaults
+          const billCategories = nessieConstraints
+            .filter((c) => c.id.startsWith("nessie-bill-"))
+            .map((c) => c.category)
+          setCategories((prev) =>
+            prev.length > 0
+              ? prev
+              : [...new Set([...billCategories, "savings", "discretionary"])],
+          )
         }
       } catch (err) {
         console.log("Could not load Nessie dashboard for constraints:", err)
