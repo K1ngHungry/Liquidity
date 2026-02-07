@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -7,7 +7,7 @@ import logging
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.agent import BudgetAgent
 
@@ -88,14 +88,14 @@ async def get_items():
 
 class AgentRequest(BaseModel):
     message: str
-    conversation_history: list[dict[str, Any]] = []
+    conversation_history: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class AgentResponse(BaseModel):
     type: str  # "question" or "solution"
     content: str
-    solver_result: dict[str, Any] | None = None
-    conversation: list[dict[str, Any]]
+    solver_result: Optional[Dict[str, Any]] = None
+    conversation: List[Dict[str, Any]]
 
 
 @app.post("/api/agent/solve", response_model=AgentResponse)
