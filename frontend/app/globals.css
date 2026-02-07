@@ -11,40 +11,43 @@
 @layer base {
   :root {
     --background: 0 0% 0%;
-    --foreground: 210 40% 98%;
-    --card: 0 0% 4%;
-    --card-foreground: 210 40% 98%;
-    --popover: 0 0% 4%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 231 89% 34%;
+    --foreground: 210 20% 98%;
+    --card: 215 15% 4%;
+    --card-foreground: 210 20% 98%;
+    --popover: 215 15% 4%;
+    --popover-foreground: 210 20% 98%;
+    --primary: 220 45% 42%;   /* Muted Professional Blue */
     --primary-foreground: 0 0% 100%;
-    --secondary: 274 90% 28%;
-    --secondary-foreground: 0 0% 100%;
-    --muted: 215 20% 15%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 204 100% 38%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 62.8% 30.6%;
+    --secondary: 225 15% 18%; /* Dark Slate */
+    --secondary-foreground: 210 40% 98%;
+    --muted: 215 15% 15%;
+    --muted-foreground: 215 15% 65%;
+    --accent: 210 40% 30%;   /* Desaturated Blue Accent */
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 50% 30%;
     --destructive-foreground: 0 0% 100%;
-    --border: 215 20% 15%;
-    --input: 215 20% 15%;
-    --ring: 204 100% 38%;
-    --chart-1: 231 89% 34%; /* Deep Blue (Primary) */
-    --chart-2: 204 100% 38%; /* Bright Blue (Accent) */
-    --chart-3: 195 90% 60%; /* Cyan-ish Blue */
-    --chart-4: 210 80% 80%; /* Light Blue */
-    --chart-5: 240 60% 70%; /* Soft Periwinkle Blue */
-    --radius: 0.75rem;
-    --sidebar-background: 0 0% 4%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 231 89% 34%;
+    --border: 215 15% 18%;
+    --input: 215 15% 18%;
+    --ring: 220 45% 42%;
+    
+    /* Monochromatic Professional Charts */
+    --chart-1: 220 50% 40%; 
+    --chart-2: 215 35% 55%; 
+    --chart-3: 210 25% 65%; 
+    --chart-4: 210 20% 80%; 
+    --chart-5: 220 15% 25%;
+    
+    --radius: 0.5rem;
+    --sidebar-background: 215 15% 4%;
+    --sidebar-foreground: 210 20% 98%;
+    --sidebar-primary: 220 45% 42%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 204 100% 38%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 215 20% 15%;
-    --sidebar-ring: 204 100% 38%;
-    --success: 142 71% 45%;
-    --warning: 38 92% 50%;
+    --sidebar-accent: 215 15% 12%; 
+    --sidebar-accent-foreground: 210 20% 98%;
+    --sidebar-border: 215 15% 18%;
+    --sidebar-ring: 220 45% 42%;
+    --success: 142 50% 40%;
+    --warning: 38 60% 50%;
   }
 }
 

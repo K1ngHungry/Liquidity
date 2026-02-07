@@ -32,8 +32,8 @@ export function SpendingChart({ data }: { data?: DashboardMonthlySpending[] }) {
             <AreaChart data={resolved} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="spendingGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#9FC490" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="#9FC490" stopOpacity={0} />
+                  <stop offset="0%" stopColor="hsl(220, 45%, 42%)" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="hsl(220, 45%, 42%)" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(212, 18%, 16%)" />
@@ -61,7 +61,7 @@ export function SpendingChart({ data }: { data?: DashboardMonthlySpending[] }) {
               <Area
                 type="monotone"
                 dataKey="amount"
-                stroke="#9FC490"
+                stroke="hsl(220, 45%, 42%)"
                 strokeWidth={2}
                 fill="url(#spendingGradient)"
               />

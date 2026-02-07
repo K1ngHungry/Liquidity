@@ -233,7 +233,7 @@ def _build_dashboard_response(
         )
 
     category_breakdown: list[DashboardCategoryBreakdown] = []
-    color_palette = ["#9FC490", "#82A3A1", "#C0DFA1", "#465362", "#6A8A88", "#B0D49A", "#5B7B79", "#3A4857"]
+    color_palette = ["#336699", "#6688aa", "#8faabb", "#cddde8", "#36454f", "#4d73b3", "#506e95", "#4c5666"]
     if purchase_total > 0:
         for idx, (category, amount) in enumerate(
             sorted(category_totals.items(), key=lambda item: item[1], reverse=True)

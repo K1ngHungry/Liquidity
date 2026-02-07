@@ -23,14 +23,14 @@ import { cn } from "@/lib/utils"
 import type { Recommendation } from "@/lib/api"
 
 export const COLORS = [
-  "#9FC490",
-  "#7DB8A0",
-  "#5BA3B0",
-  "#4A90A4",
-  "#8B7EC8",
-  "#C490A0",
-  "#D4A574",
-  "#A0C4E8",
+  "hsl(220, 50%, 40%)", // Primary Blue
+  "hsl(215, 35%, 55%)", // Muted Blue
+  "hsl(210, 25%, 65%)", // Grey-Blue
+  "hsl(210, 20%, 80%)", // Light Blue
+  "hsl(220, 15%, 25%)", // Dark Slate Blue
+  "hsl(220, 40%, 50%)", // Slightly brighter blue
+  "hsl(215, 30%, 45%)", // Medium Blue
+  "hsl(210, 15%, 35%)", // Dark Grey-Blue
 ]
 
 interface BudgetReportProps {

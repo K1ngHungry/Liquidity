@@ -32,15 +32,16 @@ export type CategoryBreakdown = {
 }
 
 // Colors computed in JS (not CSS variables) for Recharts compatibility
+// Colors computed in JS (not CSS variables) for Recharts compatibility
 export const CATEGORY_COLORS: Record<string, string> = {
-  "Food & Dining": "#9FC490",
-  Transportation: "#82A3A1",
-  Shopping: "#C0DFA1",
-  Entertainment: "#465362",
-  Bills: "#6A8A88",
-  Health: "#B0D49A",
-  Travel: "#5B7B79",
-  Other: "#3A4857",
+  "Food & Dining": "hsl(220, 50%, 40%)", // Primary Blue
+  Transportation: "hsl(215, 35%, 55%)", // Muted Blue
+  Shopping: "hsl(210, 25%, 65%)", // Grey-Blue
+  Entertainment: "hsl(210, 20%, 80%)", // Light Blue
+  Bills: "hsl(220, 15%, 25%)", // Dark Slate Blue
+  Health: "hsl(220, 40%, 50%)", // Slightly brighter blue
+  Travel: "hsl(215, 30%, 45%)", // Medium Blue
+  Other: "hsl(210, 15%, 35%)", // Dark Grey-Blue
 }
 
 export function getTransactions(): Transaction[] {
@@ -65,13 +66,13 @@ export function getTransactions(): Transaction[] {
 
 export function getBudgets(): Budget[] {
   return [
-    { category: "Food & Dining", limit: 500, spent: 108.02, color: "#9FC490" },
-    { category: "Transportation", limit: 200, spent: 76.80, color: "#82A3A1" },
-    { category: "Shopping", limit: 300, spent: 197.83, color: "#C0DFA1" },
-    { category: "Entertainment", limit: 100, spent: 26.98, color: "#465362" },
-    { category: "Bills", limit: 400, spent: 221.99, color: "#6A8A88" },
-    { category: "Health", limit: 100, spent: 49.99, color: "#B0D49A" },
-    { category: "Travel", limit: 500, spent: 389.00, color: "#5B7B79" },
+    { category: "Food & Dining", limit: 500, spent: 108.02, color: "hsl(220, 50%, 40%)" },
+    { category: "Transportation", limit: 200, spent: 76.80, color: "hsl(215, 35%, 55%)" },
+    { category: "Shopping", limit: 300, spent: 197.83, color: "hsl(210, 25%, 65%)" },
+    { category: "Entertainment", limit: 100, spent: 26.98, color: "hsl(210, 20%, 80%)" },
+    { category: "Bills", limit: 400, spent: 221.99, color: "hsl(220, 15%, 25%)" },
+    { category: "Health", limit: 100, spent: 49.99, color: "hsl(220, 40%, 50%)" },
+    { category: "Travel", limit: 500, spent: 389.00, color: "hsl(215, 30%, 45%)" },
   ]
 }
 
@@ -88,13 +89,13 @@ export function getMonthlySpending(): MonthlySpending[] {
 
 export function getCategoryBreakdown(): CategoryBreakdown[] {
   return [
-    { category: "Food & Dining", amount: 108.02, percentage: 10.1, color: "#9FC490" },
-    { category: "Transportation", amount: 76.80, percentage: 7.2, color: "#82A3A1" },
-    { category: "Shopping", amount: 197.83, percentage: 18.5, color: "#C0DFA1" },
-    { category: "Entertainment", amount: 26.98, percentage: 2.5, color: "#465362" },
-    { category: "Bills", amount: 221.99, percentage: 20.8, color: "#6A8A88" },
-    { category: "Health", amount: 49.99, percentage: 4.7, color: "#B0D49A" },
-    { category: "Travel", amount: 389.00, percentage: 36.2, color: "#5B7B79" },
+    { category: "Food & Dining", amount: 108.02, percentage: 10.1, color: "hsl(220, 50%, 40%)" },
+    { category: "Transportation", amount: 76.80, percentage: 7.2, color: "hsl(215, 35%, 55%)" },
+    { category: "Shopping", amount: 197.83, percentage: 18.5, color: "hsl(210, 25%, 65%)" },
+    { category: "Entertainment", amount: 26.98, percentage: 2.5, color: "hsl(210, 20%, 80%)" },
+    { category: "Bills", amount: 221.99, percentage: 20.8, color: "hsl(220, 15%, 25%)" },
+    { category: "Health", amount: 49.99, percentage: 4.7, color: "hsl(220, 40%, 50%)" },
+    { category: "Travel", amount: 389.00, percentage: 36.2, color: "hsl(215, 30%, 45%)" },
   ]
 }
 
