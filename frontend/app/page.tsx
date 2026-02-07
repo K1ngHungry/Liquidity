@@ -1,5 +1,6 @@
 'use client';
 
+import type React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { apiClient, AgentResponse } from '@/lib/api';
 
@@ -16,6 +17,7 @@ export default function Home() {
   const [conversation, setConversation] = useState<Record<string, unknown>[]>([]);
   const [apiStatus, setApiStatus] = useState<string>('Checking...');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     apiClient.healthCheck().then(
@@ -36,12 +38,16 @@ export default function Home() {
     setMessages((prev) => [...prev, { role: 'user', content: text }]);
     setLoading(true);
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       const res: AgentResponse = await apiClient.agentSolve({
         message: text,
         conversation_history: conversation,
       });
 
+      if (controller.signal.aborted) return;
       setConversation(res.conversation);
       setMessages((prev) => [
         ...prev,
@@ -52,12 +58,14 @@ export default function Home() {
         },
       ]);
     } catch (err) {
+      if (controller.signal.aborted) return;
       setMessages((prev) => [
         ...prev,
         { role: 'assistant', content: 'Something went wrong. Is the backend running?' },
       ]);
       console.error(err);
     } finally {
+      abortControllerRef.current = null;
       setLoading(false);
     }
   };
@@ -70,6 +78,12 @@ export default function Home() {
   };
 
   const resetChat = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setLoading(false);
+    setInput('');
     setMessages([]);
     setConversation([]);
   };
@@ -176,6 +190,7 @@ export default function Home() {
       <div className="border-t border-white/10 px-4 py-4">
         <div className="max-w-3xl mx-auto flex gap-3">
           <textarea
+            aria-label="Budget constraints input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
