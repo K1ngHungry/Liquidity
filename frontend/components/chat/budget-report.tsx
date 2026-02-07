@@ -22,7 +22,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import type { Recommendation } from "@/lib/api"
 
-const COLORS = [
+export const COLORS = [
   "#9FC490",
   "#7DB8A0",
   "#5BA3B0",
@@ -99,7 +99,7 @@ export function BudgetReport({ result, recommendations }: BudgetReportProps) {
   )
 }
 
-function StatusBanner({ status, total }: { status: string; total: number }) {
+export function StatusBanner({ status, total }: { status: string; total: number }) {
   const isGood = status === "OPTIMAL" || status === "FEASIBLE"
   return (
     <Card
@@ -146,7 +146,7 @@ function StatusBanner({ status, total }: { status: string; total: number }) {
   )
 }
 
-function AllocationCard({
+export function AllocationCard({
   name,
   value,
   total,
@@ -176,7 +176,7 @@ function AllocationCard({
   )
 }
 
-function AllocationChart({
+export function AllocationChart({
   data,
 }: {
   data: { name: string; value: number; color: string }[]
@@ -235,7 +235,7 @@ function AllocationChart({
   )
 }
 
-function AllocationBars({
+export function AllocationBars({
   entries,
   total,
 }: {
@@ -277,7 +277,7 @@ function AllocationBars({
   )
 }
 
-function RecommendationsCard({
+export function RecommendationsCard({
   recommendations,
 }: {
   recommendations: Recommendation[]
@@ -341,7 +341,7 @@ function RecommendationsCard({
   )
 }
 
-function ConstraintsSection({
+export function ConstraintsSection({
   satisfied,
   dropped,
 }: {
