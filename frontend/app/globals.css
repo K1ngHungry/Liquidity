@@ -10,41 +10,41 @@
 
 @layer base {
   :root {
-    --background: 209 97% 4%;
-    --foreground: 91 30% 90%;
-    --card: 209 60% 8%;
-    --card-foreground: 91 30% 90%;
-    --popover: 209 60% 8%;
-    --popover-foreground: 91 30% 90%;
-    --primary: 103 28% 67%;
-    --primary-foreground: 209 97% 6%;
-    --secondary: 212 16% 20%;
-    --secondary-foreground: 91 30% 85%;
-    --muted: 212 16% 20%;
-    --muted-foreground: 212 12% 45%;
-    --accent: 176 14% 57%;
-    --accent-foreground: 209 97% 6%;
-    --destructive: 0 50% 45%;
-    --destructive-foreground: 91 30% 90%;
-    --border: 212 18% 16%;
-    --input: 212 18% 16%;
-    --ring: 103 28% 67%;
-    --chart-1: 103 28% 67%;
-    --chart-2: 176 14% 57%;
-    --chart-3: 91 45% 75%;
-    --chart-4: 212 16% 33%;
-    --chart-5: 209 60% 11%;
+    --background: 0 0% 0%;
+    --foreground: 210 40% 98%;
+    --card: 0 0% 4%;
+    --card-foreground: 210 40% 98%;
+    --popover: 0 0% 4%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 231 89% 34%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 274 90% 28%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 215 20% 15%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 204 100% 38%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 215 20% 15%;
+    --input: 215 20% 15%;
+    --ring: 204 100% 38%;
+    --chart-1: 231 89% 34%; /* Deep Blue (Primary) */
+    --chart-2: 204 100% 38%; /* Bright Blue (Accent) */
+    --chart-3: 195 90% 60%; /* Cyan-ish Blue */
+    --chart-4: 210 80% 80%; /* Light Blue */
+    --chart-5: 240 60% 70%; /* Soft Periwinkle Blue */
     --radius: 0.75rem;
-    --sidebar-background: 209 80% 6%;
-    --sidebar-foreground: 91 30% 85%;
-    --sidebar-primary: 103 28% 67%;
-    --sidebar-primary-foreground: 209 97% 6%;
-    --sidebar-accent: 212 16% 14%;
-    --sidebar-accent-foreground: 91 30% 90%;
-    --sidebar-border: 212 18% 16%;
-    --sidebar-ring: 103 28% 67%;
-    --success: 103 28% 67%;
-    --warning: 91 45% 75%;
+    --sidebar-background: 0 0% 4%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 231 89% 34%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 204 100% 38%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 215 20% 15%;
+    --sidebar-ring: 204 100% 38%;
+    --success: 142 71% 45%;
+    --warning: 38 92% 50%;
   }
 }
 
