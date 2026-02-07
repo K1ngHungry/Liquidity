@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Trash2, GripVertical } from "lucide-react"
+import { Plus, Trash2, GripVertical, Sparkles, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -31,6 +31,8 @@ interface ConstraintEditorProps {
   constraints: UserConstraint[]
   categories: string[]
   onConstraintsChange: (constraints: UserConstraint[]) => void
+  onOptimize?: () => void
+  optimizing?: boolean
   disabled?: boolean
 }
 
@@ -50,12 +52,16 @@ export function ConstraintEditor({
   constraints,
   categories,
   onConstraintsChange,
+  onOptimize,
+  optimizing = false,
   disabled = false,
 }: ConstraintEditorProps) {
   // Include categories from existing constraints (for AI-added ones)
   const allCategories = Array.from(
     new Set([
-      ...categories.map((c) => c.toLowerCase().replace(/\s+/g, "_")),
+      ...categories.map((c) =>
+        c.toLowerCase().trim().replace(/[^a-z0-9_]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "")
+      ),
       ...constraints.map((c) => c.category),
     ])
   )
@@ -66,7 +72,7 @@ export function ConstraintEditor({
       ...constraints,
       {
         id: generateId(),
-        category: category.toLowerCase().replace(/\s+/g, "_"),
+        category: category.toLowerCase().trim().replace(/[^a-z0-9_]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "") || "custom",
         operator: "<=",
         amount: 500,
         constraintType: "soft",
@@ -263,6 +269,21 @@ export function ConstraintEditor({
               </div>
             </div>
           ))
+        )}
+
+        {onOptimize && constraints.length > 0 && (
+          <Button
+            className="w-full mt-2"
+            onClick={onOptimize}
+            disabled={disabled || optimizing}
+          >
+            {optimizing ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4 mr-2" />
+            )}
+            {optimizing ? "Optimizing..." : "Optimize Budget"}
+          </Button>
         )}
       </CardContent>
     </Card>

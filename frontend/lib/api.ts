@@ -150,12 +150,13 @@ export interface UserPriority {
 export interface AgentRequest {
   message: string;
   conversation_history: Record<string, unknown>[];
+  user_constraints?: UserConstraint[];
 }
 
-export interface ContextualAgentRequest extends AgentRequest {
-  user_constraints?: UserConstraint[];
-  category_priorities?: UserPriority[];
-  nessie_context?: Record<string, unknown>;
+export interface DirectSolveRequest {
+  constraints: UserConstraint[];
+  objective_category?: string;
+  objective_direction?: string;
 }
 
 export interface Recommendation {
@@ -227,6 +228,13 @@ class ApiClient {
 
   async agentSolve(req: AgentRequest): Promise<AgentResponse> {
     return this.request<AgentResponse>("/api/agent/solve", {
+      method: "POST",
+      body: JSON.stringify(req),
+    });
+  }
+
+  async directSolve(req: DirectSolveRequest): Promise<AgentResponse> {
+    return this.request<AgentResponse>("/api/constraints/solve", {
       method: "POST",
       body: JSON.stringify(req),
     });

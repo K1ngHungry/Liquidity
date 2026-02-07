@@ -30,9 +30,27 @@ class OptimizationResponse(BaseModel):
     nessie_data_summary: Dict[str, Any]
     constraints_generated: List[Dict[str, Any]]
 
+class UserConstraintInput(BaseModel):
+    id: str
+    category: str
+    operator: str  # "<=", ">=", "=="
+    amount: float
+    constraint_type: str  # "hard" or "soft"
+    priority: int = 2
+    description: str = ""
+    source: str = "user"  # "user", "ai", "nessie"
+
+
 class AgentRequest(BaseModel):
     message: str
     conversation_history: list[dict[str, Any]] = []
+    user_constraints: list[UserConstraintInput] = []
+
+
+class DirectSolveRequest(BaseModel):
+    constraints: list[UserConstraintInput]
+    objective_category: str = "savings"
+    objective_direction: str = "maximize"
 
 class AgentResponse(BaseModel):
     type: str  # "question" or "solution"

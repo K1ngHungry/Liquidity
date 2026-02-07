@@ -18,13 +18,14 @@ from app.agent import BudgetAgent
 from app.nessie_client import get_nessie_client, NessieClient, transform_nessie_to_constraints
 from app.supabase_client import get_supabase_client, require_auth_user_id
 from app.models import (
-    CreateUserRequest, 
- 
+    CreateUserRequest,
+
     OptimizationResponse,
     LinkNessieResponse,
     NessieMappingResponse,
     AgentRequest,
     AgentResponse,
+    DirectSolveRequest,
     DashboardResponse,
     DashboardSummary,
     DashboardTransaction,
@@ -595,13 +596,33 @@ async def agent_solve(req: AgentRequest):
     the dialogue.
     """
     try:
+        # Convert user constraints to plain dicts for the agent
+        constraints_dicts = [c.model_dump() for c in req.user_constraints] if req.user_constraints else None
+
         result = await budget_agent.run(
             user_message=req.message,
             conversation_history=req.conversation_history or None,
+            user_constraints=constraints_dicts,
         )
         return AgentResponse(**result)
     except Exception as e:
         logger.exception("agent_solve failed")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@app.post("/api/constraints/solve", response_model=AgentResponse)
+async def direct_solve(req: DirectSolveRequest):
+    """Solve directly from UI constraints without LLM involvement."""
+    try:
+        constraints_dicts = [c.model_dump() for c in req.constraints]
+        result = BudgetAgent.solve_direct(
+            user_constraints=constraints_dicts,
+            objective_category=req.objective_category,
+            objective_direction=req.objective_direction,
+        )
+        return AgentResponse(**result)
+    except Exception as e:
+        logger.exception("direct_solve failed")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 

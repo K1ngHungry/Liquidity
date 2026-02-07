@@ -112,13 +112,13 @@ export function ScenarioComparison({ previous, current }: ScenarioComparisonProp
       <div className="grid grid-cols-2 gap-3">
         <div>
           <p className="mb-2 text-center text-xs text-muted-foreground">
-            Before
+            Current Budget
           </p>
           <AllocationChart data={toChartData(prevSolution)} />
         </div>
         <div>
           <p className="mb-2 text-center text-xs text-muted-foreground">
-            After
+            New Plan
           </p>
           <AllocationChart data={toChartData(currSolution)} />
         </div>
