@@ -1,5 +1,5 @@
 from typing import List, Optional, Literal, Dict, Any, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from ortools.sat.python import cp_model
 import logging
 import ast
@@ -16,6 +16,15 @@ class VariableDefinition(BaseModel):
     lower_bound: int
     upper_bound: int
 
+    @model_validator(mode='after')
+    def check_bounds(self) -> 'VariableDefinition':
+        if self.lower_bound > self.upper_bound:
+            raise ValueError(
+                f"lower_bound must be <= upper_bound "
+                f"(got lower_bound={self.lower_bound}, upper_bound={self.upper_bound})"
+            )
+        return self
+
 class ObjectiveDefinition(BaseModel):
     expression: str
     direction: Literal["maximize", "minimize"]
@@ -31,7 +40,7 @@ class SolverRequest(BaseModel):
 class SolverResponse(BaseModel):
     status: str
     objective_value: Optional[float] = None
-    solution: Dict[str, int] = {}
+    solution: Dict[str, int] = Field(default_factory=dict)
     wall_time: float
 
 # --- 2. The Builder (Python Engine) ---
@@ -39,17 +48,16 @@ class SolverResponse(BaseModel):
 def safe_eval_ast(expression: str, variables: Dict[str, Any]) -> Any:
     """
     Safely evaluate a mathematical expression using AST parsing.
-    Only allows basic arithmetic, comparisons, and variable lookups.
+    Only allows linear arithmetic (addition, subtraction, multiplication),
+    comparisons, and variable lookups. Division, modulo, and power operations
+    are not supported for OR-Tools IntVar.
     """
     # map AST operators to python operators
+    # Note: Only linear arithmetic operations are supported for OR-Tools IntVar
     ops = {
         ast.Add: operator.add,
         ast.Sub: operator.sub,
         ast.Mult: operator.mul,
-        ast.Div: operator.truediv,
-        ast.FloorDiv: operator.floordiv,
-        ast.Mod: operator.mod,
-        ast.Pow: operator.pow,
         ast.USub: operator.neg,
         ast.UAdd: operator.pos,
         ast.Eq: operator.eq,
@@ -63,7 +71,13 @@ def safe_eval_ast(expression: str, variables: Dict[str, Any]) -> Any:
     def _eval(node):
         if isinstance(node, ast.Expression):
             return _eval(node.body)
-        elif isinstance(node, ast.Constant):  # Numbers
+        elif isinstance(node, ast.Constant):  # Numbers only
+            # Explicitly reject bool (which is a subclass of int in Python)
+            if isinstance(node.value, bool):
+                raise TypeError(f"Non-numeric literal: {node.value!r} (type: bool)")
+            # Accept only numeric types (int, float, complex)
+            if not isinstance(node.value, (int, float, complex)):
+                raise TypeError(f"Non-numeric literal: {node.value!r} (type: {type(node.value).__name__})")
             return node.value
         elif isinstance(node, ast.Name):  # Variables
             if node.id in variables:
