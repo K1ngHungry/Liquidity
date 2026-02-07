@@ -5,7 +5,7 @@ import { Send, Bot, User, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { apiClient, AgentResponse } from "@/lib/api"
-import { cn } from "@/lib/utils"
+import { BudgetReport } from "@/components/chat/budget-report"
 
 const SUGGESTED_QUESTIONS = [
   "I make $5000/month. Rent is $1500. I want to save at least $1000.",
@@ -152,9 +152,9 @@ export default function ChatPage() {
                   >
                     <div className="whitespace-pre-wrap">{message.content}</div>
                     
-                    {/* Render Solver Results inside the bubble if present */}
+                    {/* Render visual budget report if solver result present */}
                     {message.solverResult && (
-                      <SolverDetails result={message.solverResult} />
+                      <BudgetReport result={message.solverResult} />
                     )}
                   </div>
                 </div>
@@ -205,81 +205,3 @@ export default function ChatPage() {
   )
 }
 
-function SolverDetails({ result }: { result: Record<string, unknown> }) {
-  const [open, setOpen] = useState(true)
-  const solution = result.solution as Record<string, number> | undefined
-  const satisfied = result.satisfied_constraints as string[] | undefined
-  const dropped = result.dropped_constraints as string[] | undefined
-
-  if (!solution || Object.keys(solution).length === 0) return null
-
-  return (
-    <div className="mt-4 border-t border-border/50 pt-3">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 mb-2"
-      >
-        <span>{open ? 'Hide' : 'Show'} Optimization Details</span>
-      </button>
-      
-      {open && (
-        <div className="space-y-4 text-xs bg-background/50 rounded-lg p-3 border border-border/50">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Status</span>
-            <span className={cn(
-              "font-mono font-medium",
-              result.status === "OPTIMAL" || result.status === "FEASIBLE" 
-                ? "text-green-500" 
-                : "text-red-500"
-            )}>
-              {result.status as string}
-            </span>
-          </div>
-
-          <div>
-            <span className="text-muted-foreground block mb-2 font-medium">Allocation Plan</span>
-            <div className="space-y-1">
-              {Object.entries(solution)
-                .sort(([, a], [, b]) => b - a)
-                .map(([name, value]) => (
-                  <div key={name} className="flex justify-between items-center bg-background/80 p-1.5 rounded border border-border/50">
-                    <span className="text-foreground font-medium capitalize">{name.replace(/_/g, ' ')}</span>
-                    <span className="font-mono text-primary">${value.toLocaleString()}</span>
-                  </div>
-                ))}
-            </div>
-          </div>
-
-          {satisfied && satisfied.length > 0 && (
-            <div>
-              <span className="text-muted-foreground block mb-1">Satisfied Constraints</span>
-              <ul className="space-y-1 pl-1">
-                {satisfied.map((c, i) => (
-                  <li key={i} className="flex gap-2 text-green-600/90 dark:text-green-400/90">
-                    <span>✓</span>
-                    <span>{c}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {dropped && dropped.length > 0 && (
-            <div>
-              <span className="text-muted-foreground block mb-1">Relaxed (Dropped) Constraints</span>
-              <ul className="space-y-1 pl-1">
-                {dropped.map((c, i) => (
-                  <li key={i} className="flex gap-2 text-amber-600/90 dark:text-amber-400/90">
-                    <span>⚠️</span>
-                    <span>{c}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
