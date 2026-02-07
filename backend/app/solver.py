@@ -5,8 +5,6 @@ import logging
 import ast
 import operator
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # --- 1. The Schema (The Protocol) ---
