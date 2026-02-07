@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { apiClient, AgentResponse, Recommendation } from "@/lib/api"
 import { BudgetReport } from "@/components/chat/budget-report"
+import { supabase } from "@/lib/supabase"
+import type { Session } from "@supabase/supabase-js"
 
 const SUGGESTED_QUESTIONS = [
   "I make $5000/month. Rent is $1500. I want to save at least $1000.",
@@ -25,16 +27,26 @@ export default function ChatPage() {
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
   const [conversation, setConversation] = useState<Record<string, unknown>[]>([])
+  
+  // Keep session for future use or auth checks, but not for history fetching yet
+  const [session, setSession] = useState<Session | null>(null)
+  
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // 1. Get Session (kept for Auth)
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session)
+    })
+  }, [])
 
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, loading])
 
-  // Initial greeting or check
+  // Initial health check
   useEffect(() => {
-    // Optional: could check health here, but maybe not block the UI
     apiClient.healthCheck().catch((err) => console.error("API Health check failed", err))
   }, [])
 
@@ -61,7 +73,7 @@ export default function ChatPage() {
         console.log("[Solver Result]", res.solver_result)
       }
 
-      setConversation(res.conversation)
+        setConversation(res.conversation)
       setMessages((prev) => [
         ...prev,
         {
@@ -216,4 +228,3 @@ export default function ChatPage() {
     </div>
   )
 }
-

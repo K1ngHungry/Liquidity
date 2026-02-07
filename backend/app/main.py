@@ -9,15 +9,13 @@ import logging
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 
 from app.agent import BudgetAgent
-from app.database import get_db, User
 from app.nessie_client import get_nessie_client, NessieClient, transform_nessie_to_constraints
 from app.supabase_client import get_supabase_client, require_auth_user_id
 from app.models import (
     CreateUserRequest, 
-    CreateUserResponse, 
+ 
     OptimizationResponse,
     LinkNessieResponse,
     NessieMappingResponse,
@@ -107,47 +105,6 @@ async def _run_nessie_optimization(nessie_customer_id: str) -> OptimizationRespo
 
 
 # Nessie API endpoints
-@app.post("/api/nessie/users/create", response_model=CreateUserResponse)
-async def create_nessie_user(
-    req: CreateUserRequest,
-    db: Session = Depends(get_db)
-):
-    """
-    Create a new user with a Nessie customer account.
-
-    1. Creates customer in Nessie API
-    2. Stores user_id -> nessie_customer_id mapping in database
-    3. Returns user info
-    """
-    try:
-        # Create customer in Nessie
-        nessie = get_nessie_client()
-        nessie_customer = await nessie.create_customer(
-            first_name=req.first_name,
-            last_name=req.last_name,
-            address=req.address
-        )
-
-        # Extract customer ID from Nessie response
-        # Response format: {"code": 201, "message": "...", "objectCreated": {"_id": "..."}}
-        customer_id = nessie_customer["objectCreated"]["_id"]
-
-        # Store in database
-        user = User(nessie_customer_id=customer_id)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-
-        return CreateUserResponse(
-            user_id=user.id,
-            nessie_customer_id=user.nessie_customer_id,
-            created_at=user.created_at.isoformat()
-        )
-
-    except Exception as e:
-        logger.error(f"Failed to create user: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/api/nessie/link", response_model=LinkNessieResponse)
 async def link_nessie_customer(
@@ -216,35 +173,6 @@ async def get_nessie_mapping(auth_user_id: str = Depends(require_auth_user_id)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/nessie/users/{user_id}/optimize", response_model=OptimizationResponse)
-async def optimize_user_liquidity(
-    user_id: int,
-    db: Session = Depends(get_db)
-):
-    """
-    Optimize liquidity allocation for a Nessie user.
-
-    1. Fetch user's Nessie customer ID from database
-    2. Fetch accounts and bills from Nessie API
-    3. Transform to constraint JSON
-    4. Run solver
-    5. Return results
-    """
-    try:
-        # Get user from database
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        return await _run_nessie_optimization(user.nessie_customer_id)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to optimize for user {user_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.post("/api/nessie/optimize", response_model=OptimizationResponse)
 async def optimize_current_user_liquidity(
     auth_user_id: str = Depends(require_auth_user_id),
@@ -273,7 +201,7 @@ async def optimize_current_user_liquidity(
 @app.get("/")
 async def root():
     """Root endpoint"""
-    return {"message": "Welcome to Liquidity API"}
+    return {"message": "Welcome to Liquidity API (Supabase Integration)"}
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -311,9 +239,6 @@ async def get_items():
             {"id": 3, "name": "Item 3", "value": 300},
         ]
     }
-
-
-
 
 
 @app.post("/api/agent/solve", response_model=AgentResponse)
