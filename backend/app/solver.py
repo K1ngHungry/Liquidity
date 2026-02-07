@@ -185,7 +185,29 @@ class DynamicSolver:
 # --- 3. Example Usage ---
 
 def solve_from_json(json_data: Dict[str, Any]) -> SolverResponse:
-    """Helper to parse raw dict/json into Pydantic model and solve."""
+    """
+    Solve a constraint satisfaction or optimization problem using OR-Tools CP-SAT solver.
+
+    Supports linear integer programming with variables, constraints, and optional objectives.
+    Only linear arithmetic (addition, subtraction, multiplication) and comparison operators
+    are supported.
+
+    Args:
+        json_data: Problem specification containing:
+            - variables: List of dicts with {name, lower_bound, upper_bound}
+            - constraints: List of string expressions (e.g., "2 * x + 7 * y <= 50")
+            - objective: Optional dict with {expression, direction} where direction is "maximize" or "minimize"
+
+    Returns:
+        SolverResponse with status, objective_value, solution dict, and wall_time
+
+    Example:
+        >>> solve_from_json({
+        ...     "variables": [{"name": "x", "lower_bound": 0, "upper_bound": 10}],
+        ...     "constraints": ["x >= 5"],
+        ...     "objective": {"expression": "x", "direction": "maximize"}
+        ... })
+    """
     try:
         request = SolverRequest(**json_data)
         engine = DynamicSolver()
@@ -193,6 +215,73 @@ def solve_from_json(json_data: Dict[str, Any]) -> SolverResponse:
     except Exception as e:
         logger.error(f"Validation error: {e}")
         return SolverResponse(status=f"VALIDATION_ERROR: {str(e)}", wall_time=0.0)
+
+
+def solve_constraint_problem(
+    variables: List[Dict[str, int]],
+    constraints: List[str],
+    objective_expression: Optional[str] = None,
+    objective_direction: Optional[Literal["maximize", "minimize"]] = None
+) -> Dict[str, Any]:
+    """
+    Solve a constraint satisfaction or optimization problem using OR-Tools.
+
+    This function solves integer linear programming problems with variables, constraints,
+    and an optional objective function. Only linear arithmetic operations (add, subtract,
+    multiply) and comparison operators are supported.
+
+    Args:
+        variables: List of variable definitions. Each dict must have:
+            - name: Variable name (valid Python identifier)
+            - lower_bound: Minimum integer value (must be <= upper_bound)
+            - upper_bound: Maximum integer value
+        constraints: List of constraint expressions as strings.
+            Examples: "2 * x + 7 * y <= 50", "x >= y", "3 * z == 15"
+        objective_expression: Optional expression to optimize (e.g., "2 * x + 3 * y")
+        objective_direction: Either "maximize" or "minimize" (required if objective_expression is provided)
+
+    Returns:
+        Dict containing:
+            - status: Solver status (e.g., "OPTIMAL", "FEASIBLE", "INFEASIBLE")
+            - objective_value: Value of objective function if found (None otherwise)
+            - solution: Dict mapping variable names to their optimal values
+            - wall_time: Solver execution time in seconds
+
+    Example:
+        >>> solve_constraint_problem(
+        ...     variables=[
+        ...         {"name": "x", "lower_bound": 0, "upper_bound": 50},
+        ...         {"name": "y", "lower_bound": 0, "upper_bound": 50}
+        ...     ],
+        ...     constraints=["2 * x + 7 * y <= 50", "x >= 5"],
+        ...     objective_expression="2 * x + 3 * y",
+        ...     objective_direction="maximize"
+        ... )
+        {'status': 'OPTIMAL', 'objective_value': 47.0, 'solution': {'x': 5, 'y': 5}, 'wall_time': 0.002}
+    """
+    json_data: Dict[str, Any] = {
+        "variables": variables,
+        "constraints": constraints
+    }
+
+    if objective_expression is not None:
+        if objective_direction is None:
+            raise ValueError("objective_direction must be provided when objective_expression is specified")
+        json_data["objective"] = {
+            "expression": objective_expression,
+            "direction": objective_direction
+        }
+
+    result = solve_from_json(json_data)
+
+    # Convert Pydantic model to dict for JSON serialization
+    return {
+        "status": result.status,
+        "objective_value": result.objective_value,
+        "solution": result.solution,
+        "wall_time": result.wall_time
+    }
+
 
 if __name__ == "__main__":
     # Simulate what the LLM (Translator) would output for the problem:
@@ -227,3 +316,28 @@ if __name__ == "__main__":
     print(f"Status: {result.status}")
     print(f"Objective Value: {result.objective_value}")
     print(f"Solution: {result.solution}")
+
+    # Test the new LLM-friendly function
+    print("\n" + "="*60)
+    print("--- 4. Testing solve_constraint_problem (LLM-friendly) ---")
+    print("="*60)
+
+    result2 = solve_constraint_problem(
+        variables=[
+            {"name": "x", "lower_bound": 0, "upper_bound": 50},
+            {"name": "y", "lower_bound": 0, "upper_bound": 50},
+            {"name": "z", "lower_bound": 0, "upper_bound": 50}
+        ],
+        constraints=[
+            "2 * x + 7 * y + 3 * z <= 50",
+            "3 * x - 5 * y + 7 * z <= 45",
+            "5 * x + 2 * y - 6 * z <= 37"
+        ],
+        objective_expression="2 * x + 2 * y + 3 * z",
+        objective_direction="maximize"
+    )
+
+    print(f"Status: {result2['status']}")
+    print(f"Objective Value: {result2['objective_value']}")
+    print(f"Solution: {result2['solution']}")
+    print(f"Wall Time: {result2['wall_time']:.4f}s")
