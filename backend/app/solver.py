@@ -1,4 +1,4 @@
-from typing import List, Optional, Literal, Dict, Any, Union
+from typing import List, Optional, Literal, Dict, Any
 from pydantic import BaseModel, Field, model_validator
 from ortools.sat.python import cp_model
 import logging
@@ -29,12 +29,19 @@ class ObjectiveDefinition(BaseModel):
     expression: str
     direction: Literal["maximize", "minimize"]
 
+class ConstraintDefinition(BaseModel):
+    """A single constraint with hard/soft classification and priority."""
+    expression: str              # e.g. "dining <= 500"
+    constraint_type: Literal["hard", "soft"] = "hard"
+    priority: int = 0            # lower number = higher priority (soft only)
+    description: str = ""        # human-readable label
+
 class SolverRequest(BaseModel):
     """
     The Intermediate Representation (IR) that the LLM must generate.
     """
     variables: List[VariableDefinition]
-    constraints: List[str]  # e.g. "2 * x + 7 * y <= 50"
+    constraints: List[ConstraintDefinition]
     objective: Optional[ObjectiveDefinition] = None
 
 class SolverResponse(BaseModel):
@@ -42,6 +49,8 @@ class SolverResponse(BaseModel):
     objective_value: Optional[float] = None
     solution: Dict[str, int] = Field(default_factory=dict)
     wall_time: float
+    satisfied_constraints: List[str] = Field(default_factory=list)
+    dropped_constraints: List[str] = Field(default_factory=list)
 
 # --- 2. The Builder (Python Engine) ---
 
@@ -101,10 +110,10 @@ def safe_eval_ast(expression: str, variables: Dict[str, Any]) -> Any:
             # However, for simple constraint strings like "x < 5", there is 1 op and 1 comparator.
             if len(node.ops) != 1 or len(node.comparators) != 1:
                  raise ValueError("Only single comparisons are supported (e.g., a < b). Chained comparisons (a < b < c) are not.")
-            
+
             op = node.ops[0]
             right = _eval(node.comparators[0])
-            
+
             if type(op) in ops:
                 return ops[type(op)](left, right)
             raise ValueError(f"Unsupported comparison operator: {type(op)}")
@@ -122,60 +131,86 @@ class DynamicSolver:
     def __init__(self):
         pass
 
-    def solve(self, request: SolverRequest) -> SolverResponse:
-        # Reset state for each run to prevent accumulation
+    def _build_model(
+        self,
+        request: SolverRequest,
+        soft_to_include: List[ConstraintDefinition],
+    ) -> None:
+        """Build a fresh CP-SAT model with the given hard + selected soft constraints."""
         self.model = cp_model.CpModel()
+        self.vars = {}
+
+        for var_def in request.variables:
+            if not var_def.name.isidentifier():
+                raise ValueError(f"Invalid variable name: '{var_def.name}'.")
+            self.vars[var_def.name] = self.model.NewIntVar(
+                var_def.lower_bound, var_def.upper_bound, var_def.name
+            )
+
+        # Hard constraints (always included)
+        for c in request.constraints:
+            if c.constraint_type == "hard":
+                constraint_expr = safe_eval_ast(c.expression, self.vars)
+                self.model.Add(constraint_expr)
+
+        # Selected soft constraints
+        for c in soft_to_include:
+            constraint_expr = safe_eval_ast(c.expression, self.vars)
+            self.model.Add(constraint_expr)
+
+        if request.objective:
+            obj_expr = safe_eval_ast(request.objective.expression, self.vars)
+            if request.objective.direction == "maximize":
+                self.model.Maximize(obj_expr)
+            else:
+                self.model.Minimize(obj_expr)
+
+    def solve(self, request: SolverRequest) -> SolverResponse:
         self.solver = cp_model.CpSolver()
         self.vars: Dict[str, cp_model.IntVar] = {}
 
         try:
-            # A. Create Variables
-            for var_def in request.variables:
-                if not var_def.name.isidentifier():
-                    raise ValueError(f"Invalid variable name: '{var_def.name}'. Must be a valid Python identifier.")
-                if var_def.name in self.vars:
-                    raise ValueError(f"Duplicate variable name: '{var_def.name}'.")
+            # Separate hard and soft constraints
+            soft_constraints = sorted(
+                [c for c in request.constraints if c.constraint_type == "soft"],
+                key=lambda c: c.priority,  # lower number = higher priority
+            )
+            active_soft = list(soft_constraints)
+            dropped: List[ConstraintDefinition] = []
 
-                self.vars[var_def.name] = self.model.NewIntVar(
-                    var_def.lower_bound, 
-                    var_def.upper_bound, 
-                    var_def.name
-                )
-            
-            # B. Apply Constraints
-            for constraint_str in request.constraints:
-                # This evaluates strings like "2 * x + 5 * y <= 100" into OR-Tools LinearExpr objects
-                # and adds them to the model
-                try:
-                    constraint_expr = safe_eval_ast(constraint_str, self.vars)
-                    self.model.Add(constraint_expr)
-                except Exception as e:
-                    logger.error(f"Failed to parse constraint '{constraint_str}': {e}")
-                    raise ValueError(f"Invalid constraint format: {constraint_str}")
+            # Try with all soft constraints first, then iteratively drop lowest-priority
+            while True:
+                self._build_model(request, active_soft)
+                status = self.solver.Solve(self.model)
 
-            # D. Set Objective
-            if request.objective:
-                obj_expr = safe_eval_ast(request.objective.expression, self.vars)
-                if request.objective.direction == "maximize":
-                    self.model.Maximize(obj_expr)
-                else:
-                    self.model.Minimize(obj_expr)
+                if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                    break
 
-            # E. Solve
-            status = self.solver.Solve(self.model)
+                # Infeasible — drop the lowest-priority soft constraint
+                if not active_soft:
+                    break  # nothing left to drop
+                removed = active_soft.pop()  # highest priority number = lowest priority
+                dropped.append(removed)
+                logger.info(f"Dropping soft constraint (priority {removed.priority}): {removed.expression}")
+
             status_name = self.solver.StatusName(status)
-            
-            # F. Extract Results
             solution = {}
             if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
                 for name, var in self.vars.items():
                     solution[name] = self.solver.Value(var)
-                
+
+            satisfied = (
+                [c.description or c.expression for c in request.constraints if c.constraint_type == "hard"]
+                + [c.description or c.expression for c in active_soft]
+            )
+
             return SolverResponse(
                 status=status_name,
                 objective_value=self.solver.ObjectiveValue() if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else None,
                 solution=solution,
-                wall_time=self.solver.WallTime()
+                wall_time=self.solver.WallTime(),
+                satisfied_constraints=satisfied,
+                dropped_constraints=[c.description or c.expression for c in dropped],
             )
 
         except Exception as e:
@@ -218,50 +253,34 @@ def solve_from_json(json_data: Dict[str, Any]) -> SolverResponse:
 
 
 def solve_constraint_problem(
-    variables: List[Dict[str, int]],
-    constraints: List[str],
+    variables: List[Dict[str, Any]],
+    constraints: List[Dict[str, Any]],
     objective_expression: Optional[str] = None,
     objective_direction: Optional[Literal["maximize", "minimize"]] = None
 ) -> Dict[str, Any]:
     """
     Solve a constraint satisfaction or optimization problem using OR-Tools.
 
-    This function solves integer linear programming problems with variables, constraints,
-    and an optional objective function. Only linear arithmetic operations (add, subtract,
-    multiply) and comparison operators are supported.
-
     Args:
         variables: List of variable definitions. Each dict must have:
             - name: Variable name (valid Python identifier)
-            - lower_bound: Minimum integer value (must be <= upper_bound)
+            - lower_bound: Minimum integer value
             - upper_bound: Maximum integer value
-        constraints: List of constraint expressions as strings.
-            Examples: "2 * x + 7 * y <= 50", "x >= y", "3 * z == 15"
-        objective_expression: Optional expression to optimize (e.g., "2 * x + 3 * y")
-        objective_direction: Either "maximize" or "minimize" (required if objective_expression is provided)
+        constraints: List of constraint definitions. Each dict must have:
+            - expression: Constraint string (e.g., "2 * x + 7 * y <= 50")
+            - constraint_type: "hard" or "soft" (default "hard")
+            - priority: int, lower = higher priority (soft only, default 0)
+            - description: human-readable label (default "")
+        objective_expression: Optional expression to optimize
+        objective_direction: "maximize" or "minimize"
 
     Returns:
-        Dict containing:
-            - status: Solver status (e.g., "OPTIMAL", "FEASIBLE", "INFEASIBLE")
-            - objective_value: Value of objective function if found (None otherwise)
-            - solution: Dict mapping variable names to their optimal values
-            - wall_time: Solver execution time in seconds
-
-    Example:
-        >>> solve_constraint_problem(
-        ...     variables=[
-        ...         {"name": "x", "lower_bound": 0, "upper_bound": 50},
-        ...         {"name": "y", "lower_bound": 0, "upper_bound": 50}
-        ...     ],
-        ...     constraints=["2 * x + 7 * y <= 50", "x >= 5"],
-        ...     objective_expression="2 * x + 3 * y",
-        ...     objective_direction="maximize"
-        ... )
-        {'status': 'OPTIMAL', 'objective_value': 47.0, 'solution': {'x': 5, 'y': 5}, 'wall_time': 0.002}
+        Dict with status, objective_value, solution, wall_time,
+        satisfied_constraints, and dropped_constraints.
     """
     json_data: Dict[str, Any] = {
         "variables": variables,
-        "constraints": constraints
+        "constraints": constraints,
     }
 
     if objective_expression is not None:
@@ -269,75 +288,64 @@ def solve_constraint_problem(
             raise ValueError("objective_direction must be provided when objective_expression is specified")
         json_data["objective"] = {
             "expression": objective_expression,
-            "direction": objective_direction
+            "direction": objective_direction,
         }
 
     result = solve_from_json(json_data)
 
-    # Convert Pydantic model to dict for JSON serialization
     return {
         "status": result.status,
         "objective_value": result.objective_value,
         "solution": result.solution,
-        "wall_time": result.wall_time
+        "wall_time": result.wall_time,
+        "satisfied_constraints": result.satisfied_constraints,
+        "dropped_constraints": result.dropped_constraints,
     }
 
 
 if __name__ == "__main__":
-    # Simulate what the LLM (Translator) would output for the problem:
-    # "Maximize 2x + 2y + 3z given that:
-    #  x, y, z are roughly under 50.
-    #  2x + 7y + 3z <= 50, ..."
-    
+    # Budget example: monthly income $5000, allocate across categories
     llm_output_example = {
         "variables": [
-            {"name": "x", "lower_bound": 0, "upper_bound": 50},
-            {"name": "y", "lower_bound": 0, "upper_bound": 50},
-            {"name": "z", "lower_bound": 0, "upper_bound": 50}
+            {"name": "housing", "lower_bound": 0, "upper_bound": 5000},
+            {"name": "dining", "lower_bound": 0, "upper_bound": 5000},
+            {"name": "savings", "lower_bound": 0, "upper_bound": 5000},
+            {"name": "transport", "lower_bound": 0, "upper_bound": 5000},
+            {"name": "entertainment", "lower_bound": 0, "upper_bound": 5000},
         ],
         "constraints": [
-            "2 * x + 7 * y + 3 * z <= 50",
-            "3 * x - 5 * y + 7 * z <= 45", 
-            "5 * x + 2 * y - 6 * z <= 37"
+            # Hard: total must equal income
+            {"expression": "housing + dining + savings + transport + entertainment <= 5000",
+             "constraint_type": "hard", "description": "Total budget cannot exceed $5000"},
+            # Hard: rent is fixed
+            {"expression": "housing == 1500",
+             "constraint_type": "hard", "description": "Rent is $1500/month"},
+            # Soft priority 0 (highest): save at least $1000
+            {"expression": "savings >= 1000",
+             "constraint_type": "soft", "priority": 0, "description": "Save at least $1000"},
+            # Soft priority 1: keep dining under $500
+            {"expression": "dining <= 500",
+             "constraint_type": "soft", "priority": 1, "description": "Dining under $500"},
+            # Soft priority 2: entertainment under $300
+            {"expression": "entertainment <= 300",
+             "constraint_type": "soft", "priority": 2, "description": "Entertainment under $300"},
         ],
         "objective": {
-            "expression": "2 * x + 2 * y + 3 * z",
-            "direction": "maximize"
-        }
+            "expression": "savings",
+            "direction": "maximize",
+        },
     }
 
-    print("--- 1. Received LLM JSON Payload ---")
-    print(llm_output_example)
+    print("--- 1. LLM JSON Payload ---")
+    import json
+    print(json.dumps(llm_output_example, indent=2))
 
-    print("\n--- 2. Running Dynamic Solver ---")
+    print("\n--- 2. Running Solver ---")
     result = solve_from_json(llm_output_example)
 
-    print("\n--- 3. Solver Result ---")
-    print(f"Status: {result.status}")
-    print(f"Objective Value: {result.objective_value}")
-    print(f"Solution: {result.solution}")
-
-    # Test the new LLM-friendly function
-    print("\n" + "="*60)
-    print("--- 4. Testing solve_constraint_problem (LLM-friendly) ---")
-    print("="*60)
-
-    result2 = solve_constraint_problem(
-        variables=[
-            {"name": "x", "lower_bound": 0, "upper_bound": 50},
-            {"name": "y", "lower_bound": 0, "upper_bound": 50},
-            {"name": "z", "lower_bound": 0, "upper_bound": 50}
-        ],
-        constraints=[
-            "2 * x + 7 * y + 3 * z <= 50",
-            "3 * x - 5 * y + 7 * z <= 45",
-            "5 * x + 2 * y - 6 * z <= 37"
-        ],
-        objective_expression="2 * x + 2 * y + 3 * z",
-        objective_direction="maximize"
-    )
-
-    print(f"Status: {result2['status']}")
-    print(f"Objective Value: {result2['objective_value']}")
-    print(f"Solution: {result2['solution']}")
-    print(f"Wall Time: {result2['wall_time']:.4f}s")
+    print("\n--- 3. Result ---")
+    print(f"Status:     {result.status}")
+    print(f"Objective:  {result.objective_value}")
+    print(f"Solution:   {result.solution}")
+    print(f"Satisfied:  {result.satisfied_constraints}")
+    print(f"Dropped:    {result.dropped_constraints}")
