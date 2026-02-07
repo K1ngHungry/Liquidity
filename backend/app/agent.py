@@ -9,6 +9,7 @@ if ambiguous.
 
 import json
 import logging
+import re
 from contextvars import ContextVar
 from typing import Any
 
@@ -238,10 +239,44 @@ class BudgetAgent:
         """
         return json.loads(json.dumps(raw, default=str))
 
+    @staticmethod
+    def _build_context_block(user_constraints: list[dict[str, Any]]) -> str:
+        """Build a context string describing the user's existing constraints."""
+        if not user_constraints:
+            return ""
+
+        lines = [
+            "\n\n## Current financial context (from bank data + user settings)",
+            "The user already has the following constraints set up in the UI. "
+            "You do NOT need to ask for this information — use it directly when "
+            "building the solver problem. Include ALL of these constraints when "
+            "calling create_constraint_problem.\n",
+        ]
+        for c in user_constraints:
+            cat = c.get("category", "unknown")
+            op = c.get("operator", "<=")
+            amt = c.get("amount", 0)
+            ctype = c.get("constraint_type", "soft")
+            priority = c.get("priority", 2)
+            desc = c.get("description", "")
+            source = c.get("source", "user")
+
+            source_label = {"nessie": "bank data", "ai": "AI suggested", "user": "user set"}.get(source, source)
+            type_label = "MUST" if ctype == "hard" else f"PREFER (priority {priority})"
+            lines.append(f"- {cat} {op} ${amt:,.0f}  [{type_label}] ({source_label}) {desc}")
+
+        lines.append(
+            "\nWhen the user asks to add a new goal or purchase, add it as a "
+            "new constraint via add_user_constraint AND THEN call create_constraint_problem "
+            "with ALL constraints (existing + new) to solve immediately."
+        )
+        return "\n".join(lines)
+
     async def run(
         self,
         user_message: str,
         conversation_history: list[dict[str, Any]] | None = None,
+        user_constraints: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """
         Process a user message through the agent.
@@ -262,9 +297,17 @@ class BudgetAgent:
         _ctx_last_solver_result.set(None)
         _ctx_new_constraints.set(None)
 
+        # Build system prompt with constraint context injected
+        prompt = SYSTEM_PROMPT
+        if user_constraints:
+            prompt += self._build_context_block(user_constraints)
+
         # Ensure system prompt is the first message
         if not messages or messages[0].get("role") != "system":
-            messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
+            messages.insert(0, {"role": "system", "content": prompt})
+        else:
+            # Update existing system prompt with fresh context
+            messages[0] = {"role": "system", "content": prompt}
 
         messages.append({"role": "user", "content": user_message})
 
@@ -314,6 +357,126 @@ class BudgetAgent:
             "recommendations": [],
             "new_constraints": new_constraints,
             "conversation": updated_conversation,
+        }
+
+    @staticmethod
+    def _sanitize_name(raw: str) -> str:
+        """Turn an arbitrary string into a valid Python identifier for the solver."""
+        # Replace non-alphanumeric chars with underscores
+        name = re.sub(r"[^a-zA-Z0-9_]", "_", raw.lower().strip())
+        # Collapse multiple underscores
+        name = re.sub(r"_+", "_", name).strip("_")
+        # Prefix with underscore if it starts with a digit
+        if name and name[0].isdigit():
+            name = f"cat_{name}"
+        # Fallback for empty
+        if not name or not name.isidentifier():
+            name = "category"
+        return name
+
+    @staticmethod
+    def solve_direct(
+        user_constraints: list[dict[str, Any]],
+        objective_category: str = "savings",
+        objective_direction: str = "maximize",
+    ) -> dict[str, Any]:
+        """Solve directly from user constraints without LLM involvement.
+
+        Converts UI constraints to solver format and runs the solver.
+        Returns the same shape as a normal agent response.
+        """
+        # Sanitize and collect all unique categories, find the income ceiling
+        categories: set[str] = set()
+        income_amount = 0
+        # Map original category → sanitized name
+        cat_map: dict[str, str] = {}
+
+        for c in user_constraints:
+            raw_cat = c.get("category", "")
+            if raw_cat == "total_income":
+                income_amount = int(c.get("amount", 0))
+            else:
+                safe = BudgetAgent._sanitize_name(raw_cat)
+                cat_map[raw_cat] = safe
+                categories.add(safe)
+
+        # Ensure objective category exists
+        safe_objective = BudgetAgent._sanitize_name(objective_category)
+        if safe_objective and safe_objective not in categories:
+            categories.add(safe_objective)
+
+        upper = income_amount if income_amount > 0 else 100_000
+
+        # Build variables
+        variables = [
+            {"name": cat, "lower_bound": 0, "upper_bound": upper}
+            for cat in sorted(categories)
+        ]
+
+        # Build constraints
+        solver_constraints: list[dict[str, Any]] = []
+
+        # Income ceiling: sum of all categories <= income
+        if income_amount > 0 and categories:
+            expr = " + ".join(sorted(categories)) + f" <= {income_amount}"
+            solver_constraints.append({
+                "expression": expr,
+                "constraint_type": "hard",
+                "priority": 0,
+                "description": "Total allocation cannot exceed income",
+            })
+
+        # Convert each user constraint to a solver expression
+        for c in user_constraints:
+            raw_cat = c.get("category", "")
+            if raw_cat == "total_income":
+                continue  # already handled above
+            safe_cat = cat_map.get(raw_cat, BudgetAgent._sanitize_name(raw_cat))
+            op = c.get("operator", "<=")
+            amt = int(c.get("amount", 0))
+            ctype = c.get("constraint_type", "soft")
+            priority = int(c.get("priority", 2))
+            desc = c.get("description", "")
+
+            solver_constraints.append({
+                "expression": f"{safe_cat} {op} {amt}",
+                "constraint_type": ctype,
+                "priority": priority,
+                "description": desc or f"{safe_cat} {op} ${amt}",
+            })
+
+        # Build objective
+        objective = None
+        if safe_objective and safe_objective in categories:
+            objective = {
+                "expression": safe_objective,
+                "direction": objective_direction,
+            }
+
+        problem = {
+            "variables": variables,
+            "constraints": solver_constraints,
+            "objective": objective,
+        }
+
+        logger.info("Direct solve: %d vars, %d constraints, objective=%s",
+                     len(variables), len(solver_constraints), safe_objective)
+        logger.debug("Direct solve problem: %s", json.dumps(problem, indent=2))
+
+        solver_result = solve_from_json(problem)
+        result_dict = solver_result.model_dump()
+
+        if result_dict.get("status") == "ERROR":
+            logger.error("Solver returned ERROR for problem: %s", json.dumps(problem, indent=2))
+
+        return {
+            "type": "solution",
+            "content": "",
+            "solver_result": result_dict,
+            "solver_input": problem,
+            "recommendations": BudgetAgent._compute_recommendations(result_dict),
+            "new_constraints": [],
+            "conversation": [],
         }
 
     @staticmethod
