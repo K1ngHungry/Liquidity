@@ -143,6 +143,9 @@ export default function DashboardPage() {
           accessToken={session.access_token}
           onRegisterSuccess={handleRegisterSuccess}
         />
+        <Button variant="outline" onClick={handleSignOut} className="mt-4">
+          Sign Out
+        </Button>
       </div>
     )
   }
