@@ -40,9 +40,16 @@ export function BudgetReport({ result }: BudgetReportProps) {
   const dropped = result.dropped_constraints as string[] | undefined
   const status = result.status as string
 
-  if (!solution || Object.keys(solution).length === 0) return null
+  const hasStatus = !!status
+  const hasConstraints =
+    (satisfied && satisfied.length > 0) || (dropped && dropped.length > 0)
+  const hasSolution = solution && Object.keys(solution).length > 0
 
-  const entries = Object.entries(solution).sort(([, a], [, b]) => b - a)
+  if (!hasStatus && !hasConstraints && !hasSolution) return null
+
+  const entries = hasSolution
+    ? Object.entries(solution).sort(([, a], [, b]) => b - a)
+    : []
   const total = entries.reduce((sum, [, v]) => sum + v, 0)
 
   const chartData = entries.map(([name, value], i) => ({
@@ -54,26 +61,28 @@ export function BudgetReport({ result }: BudgetReportProps) {
   return (
     <div className="mt-4 space-y-3 border-t border-border/50 pt-4">
       {/* Status Banner */}
-      <StatusBanner status={status} total={total} />
+      {hasStatus && <StatusBanner status={status} total={total} />}
 
       {/* Allocation Cards + Chart */}
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <div className="space-y-2">
-          {entries.map(([name, value], i) => (
-            <AllocationCard
-              key={name}
-              name={name}
-              value={value}
-              total={total}
-              color={COLORS[i % COLORS.length]}
-            />
-          ))}
+      {hasSolution && (
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div className="space-y-2">
+            {entries.map(([name, value], i) => (
+              <AllocationCard
+                key={name}
+                name={name}
+                value={value}
+                total={total}
+                color={COLORS[i % COLORS.length]}
+              />
+            ))}
+          </div>
+          <AllocationChart data={chartData} />
         </div>
-        <AllocationChart data={chartData} />
-      </div>
+      )}
 
       {/* Allocation Bars */}
-      <AllocationBars entries={entries} total={total} />
+      {hasSolution && <AllocationBars entries={entries} total={total} />}
 
       {/* Constraints */}
       <ConstraintsSection satisfied={satisfied} dropped={dropped} />
@@ -277,6 +286,8 @@ function ConstraintsSection({
       <button
         type="button"
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-controls="constraints-details"
         className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
         {open ? (
@@ -288,7 +299,7 @@ function ConstraintsSection({
       </button>
 
       {open && (
-        <div className="mt-2 space-y-2 rounded-lg border border-border/50 bg-background/50 p-3 text-xs">
+        <div id="constraints-details" className="mt-2 space-y-2 rounded-lg border border-border/50 bg-background/50 p-3 text-xs">
           {satisfied && satisfied.length > 0 && (
             <div className="space-y-1">
               {satisfied.map((c, i) => (

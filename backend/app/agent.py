@@ -234,9 +234,13 @@ class BudgetAgent:
         for msg in reversed(conversation):
             if msg.get("role") == "tool":
                 try:
-                    data = json.loads(msg["content"])
+                    content = msg.get("content")
+                    if isinstance(content, dict):
+                        data = content
+                    else:
+                        data = json.loads(content)
                     if "solution" in data and "status" in data:
                         return data
-                except (json.JSONDecodeError, KeyError, TypeError):
+                except (json.JSONDecodeError, KeyError):
                     continue
         return None
