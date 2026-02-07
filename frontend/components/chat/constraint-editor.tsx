@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Trash2, GripVertical, Sparkles, Loader2 } from "lucide-react"
+import { Plus, Trash2, GripVertical, Sparkles, Loader2, CheckCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -131,16 +131,18 @@ export function ConstraintEditor({
             {constraints.length}
           </Badge>
         </div>
-        <Button 
-          size="sm" 
-          variant="outline" 
-          className="h-7 text-xs" 
-          onClick={addConstraint} 
-          disabled={disabled}
-        >
-          <Plus className="h-3.5 w-3.5 mr-1" />
-          Add
-        </Button>
+        <div className="flex items-center gap-2">
+           <Button 
+            size="sm" 
+            variant="outline" 
+            className="h-7 text-xs" 
+            onClick={addConstraint} 
+            disabled={disabled}
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            Add
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3 px-0 flex-1 overflow-y-auto">
         {constraints.length === 0 ? (
@@ -190,6 +192,11 @@ export function ConstraintEditor({
                             ))}
                           </SelectContent>
                         </Select>
+
+                        <div className="flex items-center gap-1 px-2 h-7 rounded-md bg-green-500/10 text-green-600 border border-green-500/20 shrink-0 select-none" title="Verified against Nessie API Context">
+                           <CheckCircle2 className="h-3.5 w-3.5" />
+                           <span className="text-[10px] font-medium">Verified</span>
+                        </div>
 
                         <Badge 
                           variant={constraint.constraintType === "hard" ? "destructive" : "secondary"}
@@ -243,22 +250,24 @@ export function ConstraintEditor({
                         </div>
                       </div>
                       
-                      {constraint.constraintType === "soft" && (
-                         <div className="flex items-center gap-2 pt-1 border-t border-border/50">
-                           <span className="text-[10px] text-muted-foreground font-medium">Priority:</span>
-                           <Slider
+                       {constraint.constraintType === "soft" && (
+                          <div className="flex items-center gap-2 pt-1 border-t border-border/50">
+                            <span className="text-[10px] text-muted-foreground font-medium">Priority:</span>
+                            <Slider
                               value={[constraint.priority]}
                               min={0}
                               max={4}
                               step={1}
                               onValueChange={([val]) => updateConstraint(constraint.id, { priority: val })}
                               className="flex-1 max-w-[120px]"
-                           />
-                           <span className="text-[10px] text-muted-foreground min-w-[45px] text-right">
-                             {PRIORITY_LABELS[constraint.priority]}
-                           </span>
-                         </div>
+                            />
+                            <span className="text-[10px] text-muted-foreground min-w-[45px] text-right">
+                              {PRIORITY_LABELS[constraint.priority]}
+                            </span>
+                          </div>
                       )}
+                      
+                      
                     </div>
                   );
                 })

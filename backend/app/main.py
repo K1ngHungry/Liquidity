@@ -176,14 +176,24 @@ def _build_dashboard_response(
         if purchase.get("status") == "cancelled":
             continue
         amount = _safe_float(purchase.get("amount"))
-        purchase_total += amount
-        description = purchase.get("description") or "Purchase"
-        merchant = str(purchase.get("merchant_id") or purchase.get("merchant") or description)
-        category = purchase.get("category") or description
-        category_totals[category] = category_totals.get(category, 0.0) + amount
+        parsed_date = _parse_date(purchase.get("purchase_date") or purchase.get("created_at") or purchase.get("date"))
+        is_current_month = False
+        if parsed_date:
+            now = datetime.utcnow()
+            if parsed_date.year == now.year and parsed_date.month == now.month:
+                is_current_month = True
+
+        # We only want to track processed transactions in the transaction list, 
+        # but for "Spending by Category" we only want bills/recurring items as requested.
+        # So we SKIP adding standard one-off purchases to category_totals here.
+        pass
 
         purchase_date = purchase.get("purchase_date") or purchase.get("created_at") or purchase.get("date")
         date_str = purchase_date if isinstance(purchase_date, str) else ""
+
+        description = purchase.get("description") or "Purchase"
+        merchant = str(purchase.get("merchant_id") or purchase.get("merchant") or description)
+        category = purchase.get("category") or description
 
         transactions.append(
             DashboardTransaction(
@@ -214,6 +224,15 @@ def _build_dashboard_response(
         if key in monthly_spending_map:
             monthly_spending_map[key] += _safe_float(purchase.get("amount"))
 
+    for bill in bills:
+        # Assuming get_account_bills returns active/recurring bills.
+        # We include them all as projecting "this month's" obligations.
+        amount = _safe_float(bill.get("payment_amount"))
+        
+        # Use payee or nickname for better categorization of bills
+        category = bill.get("payee") or bill.get("nickname") or "Bill"
+        category_totals[category] = category_totals.get(category, 0.0) + amount
+
     monthly_income_map = {(y, m): 0.0 for (y, m, _) in month_labels}
     for deposit in deposits:
         parsed = _parse_date(deposit.get("transaction_date") or deposit.get("created_at") or deposit.get("date"))
@@ -222,6 +241,10 @@ def _build_dashboard_response(
         key = (parsed.year, parsed.month)
         if key in monthly_income_map:
             monthly_income_map[key] += _safe_float(deposit.get("amount"))
+        
+        # Also add income to category breakdown? Usually category breakdown is expenses.
+        # The user asked for "bills/recurring stuff that I will pay", so income might not be included in expenses breakdown.
+
 
     monthly_spending: list[DashboardMonthlySpending] = []
     for year, month, label in month_labels:
@@ -234,11 +257,14 @@ def _build_dashboard_response(
 
     category_breakdown: list[DashboardCategoryBreakdown] = []
     color_palette = ["#336699", "#6688aa", "#8faabb", "#cddde8", "#36454f", "#4d73b3", "#506e95", "#4c5666"]
-    if purchase_total > 0:
+    
+    total_spending_this_month = sum(category_totals.values())
+
+    if total_spending_this_month > 0:
         for idx, (category, amount) in enumerate(
             sorted(category_totals.items(), key=lambda item: item[1], reverse=True)
         ):
-            percentage = (amount / purchase_total) * 100
+            percentage = (amount / total_spending_this_month) * 100
             category_breakdown.append(
                 DashboardCategoryBreakdown(
                     category=category,

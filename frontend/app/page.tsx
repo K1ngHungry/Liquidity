@@ -182,17 +182,12 @@ export default function DashboardPage() {
 
       <StatCards summary={resolvedSummary} />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <SpendingChart data={resolvedMonthlySpending} />
-        </div>
-        <div>
-          <CategoryBreakdown data={resolvedCategoryBreakdown} />
-        </div>
+      <div className="grid grid-cols-1 gap-6">
+        <SpendingChart data={resolvedMonthlySpending} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <BudgetTracker budgets={resolvedBudgets} />
+        <CategoryBreakdown data={resolvedCategoryBreakdown} />
         <RecentTransactions transactions={resolvedTransactions} />
       </div>
     </div>
