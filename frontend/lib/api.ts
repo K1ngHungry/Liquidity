@@ -280,6 +280,21 @@ class ApiClient {
       },
     });
   }
+
+  async explainSolverResult(
+    solverResult: Record<string, unknown>,
+    userConstraints: UserConstraint[],
+    originalQuery: string
+  ): Promise<{ explanation: string }> {
+    return this.request<{ explanation: string }>("/api/agent/explain", {
+      method: "POST",
+      body: JSON.stringify({
+        solver_result: solverResult,
+        user_constraints: userConstraints,
+        original_query: originalQuery,
+      }),
+    });
+  }
 }
 
 export const apiClient = new ApiClient();

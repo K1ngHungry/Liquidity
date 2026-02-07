@@ -62,6 +62,16 @@ class AgentResponse(BaseModel):
     conversation: list[dict[str, Any]]
 
 
+class ExplainRequest(BaseModel):
+    solver_result: Dict[str, Any]
+    user_constraints: List[UserConstraintInput]
+    original_query: str = ""
+
+
+class ExplainResponse(BaseModel):
+    explanation: str
+
+
 class DashboardSummary(BaseModel):
     totalBalance: float
     monthlyIncome: float

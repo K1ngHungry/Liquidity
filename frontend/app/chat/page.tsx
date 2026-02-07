@@ -1,14 +1,10 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import { Send, Bot, Loader2 } from "lucide-react"
 import { apiClient, type AgentResponse, type Recommendation, type UserConstraint } from "@/lib/api"
 import { CommandCenter } from "@/components/chat/command-center"
-import { CopilotChat } from "@/components/chat/copilot-chat"
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from "@/components/ui/resizable"
+import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import type { Session } from "@supabase/supabase-js"
 
@@ -66,16 +62,12 @@ export default function ChatPage() {
   // Auth session
   const [session, setSession] = useState<Session | null>(null)
 
-  // Responsive layout
-  const [isSmallScreen, setIsSmallScreen] = useState(false)
+  // Explanation state
+  const [explanation, setExplanation] = useState<string | null>(null)
+  const [isExplaining, setIsExplaining] = useState(false)
 
-  useEffect(() => {
-    const mql = window.matchMedia("(max-width: 1023px)")
-    const onChange = () => setIsSmallScreen(mql.matches)
-    mql.addEventListener("change", onChange)
-    setIsSmallScreen(mql.matches)
-    return () => mql.removeEventListener("change", onChange)
-  }, [])
+  // Last assistant message (shown inline)
+  const lastAssistantMsg = [...messages].reverse().find(m => m.role === "assistant")
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -118,10 +110,10 @@ export default function ChatPage() {
           dashboard.categoryBreakdown.forEach(cat => {
               const name = sanitizeCategory(cat.category)
               const amount = Math.round(cat.amount)
-              baselineSolution[name] = Math.max(baselineSolution[name] || 0, amount) 
+              baselineSolution[name] = Math.max(baselineSolution[name] || 0, amount)
           })
         }
-        
+
         // Set this as the fixed "Previous Result" for comparison
         setPreviousResult({
             status: "CURRENT",
@@ -163,7 +155,6 @@ export default function ChatPage() {
           )
 
           if (totalIncome > 0) {
-            // Income ceiling — informational context for the solver
             nessieConstraints.push({
               id: "nessie-income",
               category: "total_income",
@@ -175,7 +166,6 @@ export default function ChatPage() {
               source: "nessie" as const,
             })
 
-            // Savings goal — soft constraint at 20% of income
             const savingsGoal = Math.round(totalIncome * 0.2)
             nessieConstraints.push({
               id: "nessie-savings-goal",
@@ -193,7 +183,6 @@ export default function ChatPage() {
         if (nessieConstraints.length > 0) {
           setConstraints((prev) => (prev.length > 0 ? prev : nessieConstraints))
 
-          // Build categories from bill payees + defaults
           const billCategories = nessieConstraints
             .filter((c) => c.id.startsWith("nessie-bill-"))
             .map((c) => c.category)
@@ -227,13 +216,6 @@ export default function ChatPage() {
         user_constraints: constraints.length > 0 ? constraints : undefined,
       })
 
-      if (res.solver_input) {
-        console.log("[Solver Input]", res.solver_input)
-      }
-      if (res.solver_result) {
-        console.log("[Solver Result]", res.solver_result)
-      }
-
       // Update solver state for Command Center
       if (res.solver_result) {
         setCurrentResult((prev) => {
@@ -244,7 +226,6 @@ export default function ChatPage() {
       }
 
       // Merge any new constraints from agent
-      console.log("[Agent Response] new_constraints:", res.new_constraints)
       if (res.new_constraints && res.new_constraints.length > 0) {
         setConstraints((prev) => [
           ...prev,
@@ -272,8 +253,7 @@ export default function ChatPage() {
         ...prev,
         {
           role: "assistant",
-          content:
-            "Sorry, I encountered an error connecting to the solver backend. Please make sure the backend is running.",
+          content: "Sorry, I encountered an error. Please make sure the backend is running.",
         },
       ])
     } finally {
@@ -286,14 +266,10 @@ export default function ChatPage() {
     sendMessage()
   }
 
-  const handleSuggestion = (question: string) => {
-    if (loading) return
-    sendMessage(question)
-  }
-
   const handleOptimize = async () => {
     if (loading || constraints.length === 0) return
     setLoading(true)
+    setExplanation(null)
 
     try {
       const res: AgentResponse = await apiClient.directSolve({
@@ -301,11 +277,9 @@ export default function ChatPage() {
       })
 
       if (res.solver_result) {
-        console.log("[Direct Solve Result]", res.solver_result)
         setCurrentResult(res.solver_result)
         setCurrentRecommendations(res.recommendations)
-        
-        // Keep previousResult fixed as baseline
+
         if (!previousResult) {
              setPreviousResult(res.solver_result)
         }
@@ -317,55 +291,89 @@ export default function ChatPage() {
     }
   }
 
-  const direction = isSmallScreen ? "vertical" : "horizontal"
+  const handleExplain = async () => {
+    if (!currentResult || isExplaining) return
+    setIsExplaining(true)
+
+    try {
+        const res = await apiClient.explainSolverResult(
+            currentResult,
+            constraints,
+            "User requested explanation for current plan"
+        )
+        setExplanation(res.explanation)
+    } catch (err) {
+        console.error("Explanation failed:", err)
+        setExplanation("Sorry, I couldn't generate an explanation at this time.")
+    } finally {
+        setIsExplaining(false)
+    }
+  }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col gap-4">
-      <div>
+    <div className="flex h-[calc(100vh-4rem)] flex-col">
+      {/* Header */}
+      <div className="px-1 pb-3">
         <h1 className="text-2xl font-bold text-foreground">
           AI Financial Advisor
         </h1>
         <p className="text-sm text-muted-foreground">
-          Describe your financial situation and let our solver optimize your
-          budget.
+          Optimize your budget with constraints and AI-powered analysis.
         </p>
       </div>
 
-      <ResizablePanelGroup
-        key={direction}
-        direction={direction}
-        className="flex-1 rounded-lg border border-border"
-      >
-        <ResizablePanel
-          defaultSize={isSmallScreen ? 40 : 60}
-          minSize={isSmallScreen ? 0 : 30}
-          collapsible={isSmallScreen}
-        >
-          <CommandCenter
-            currentResult={currentResult}
-            previousResult={previousResult}
-            recommendations={currentRecommendations}
-            constraints={constraints}
-            categories={categories}
-            onConstraintsChange={setConstraints}
-            onOptimize={handleOptimize}
-            optimizing={loading}
-          />
-        </ResizablePanel>
+      {/* Command Center takes full remaining space */}
+      <div className="flex-1 overflow-hidden rounded-lg border border-border">
+        <CommandCenter
+          currentResult={currentResult}
+          previousResult={previousResult}
+          recommendations={currentRecommendations}
+          constraints={constraints}
+          categories={categories}
+          onConstraintsChange={setConstraints}
+          onOptimize={handleOptimize}
+          optimizing={loading}
+          explanation={explanation}
+          onExplain={handleExplain}
+          isExplaining={isExplaining}
+        />
+      </div>
 
-        <ResizableHandle withHandle />
+      {/* Compact chat input bar */}
+      <div className="border-t border-border bg-background pt-3 pb-1">
+        {/* Last assistant message (if any) */}
+        {lastAssistantMsg && (
+          <div className="flex items-start gap-2 mb-2 px-1">
+            <Bot className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+            <p className="text-xs text-muted-foreground line-clamp-2">
+              {lastAssistantMsg.content}
+            </p>
+          </div>
+        )}
 
-        <ResizablePanel defaultSize={isSmallScreen ? 60 : 40} minSize={25}>
-          <CopilotChat
-            messages={messages}
-            input={input}
-            loading={loading}
-            onInputChange={setInput}
-            onSubmit={handleSubmit}
-            onSuggestion={handleSuggestion}
+        <form onSubmit={handleSubmit} className="flex gap-2 px-1">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Add a constraint: &quot;I want to buy a $2000 watch&quot; or &quot;Keep dining under $300&quot;"
+            disabled={loading}
+            className="flex-1 rounded-lg border border-border bg-secondary px-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50"
           />
-        </ResizablePanel>
-      </ResizablePanelGroup>
+          <Button
+            type="submit"
+            disabled={loading || !input.trim()}
+            size="icon"
+            className="shrink-0"
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </Button>
+        </form>
+      </div>
     </div>
   )
 }

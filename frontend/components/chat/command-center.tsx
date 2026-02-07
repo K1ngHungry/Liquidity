@@ -27,7 +27,12 @@ interface CommandCenterProps {
   onConstraintsChange: (constraints: UserConstraint[]) => void
   onOptimize: () => void
   optimizing: boolean
+  explanation: string | null
+  onExplain: () => void
+  isExplaining: boolean
 }
+
+// ... (toEditorConstraint and fromEditorConstraint remain unchanged)
 
 // Map between API UserConstraint and Editor UserConstraint (camelCase)
 function toEditorConstraint(c: UserConstraint): EditorConstraint {
@@ -50,6 +55,8 @@ function fromEditorConstraint(c: EditorConstraint): UserConstraint {
   }
 }
 
+
+
 export function CommandCenter({
   currentResult,
   previousResult,
@@ -59,6 +66,9 @@ export function CommandCenter({
   onConstraintsChange,
   onOptimize,
   optimizing,
+  explanation,
+  onExplain,
+  isExplaining,
 }: CommandCenterProps) {
   const hasResult = currentResult !== null
   const hasComparison = currentResult !== null && previousResult !== null
@@ -96,6 +106,9 @@ export function CommandCenter({
               <CurrentResultView
                 result={currentResult}
                 recommendations={recommendations}
+                explanation={explanation}
+                onExplain={onExplain}
+                isExplaining={isExplaining}
               />
             ) : (
               <CommandCenterEmpty />
@@ -130,9 +143,15 @@ export function CommandCenter({
 function CurrentResultView({
   result,
   recommendations,
+  explanation,
+  onExplain,
+  isExplaining,
 }: {
   result: Record<string, unknown>
   recommendations: Recommendation[]
+  explanation: string | null
+  onExplain: () => void
+  isExplaining: boolean
 }) {
   const solution = result.solution as Record<string, number> | undefined
   const status = result.status as string
@@ -154,6 +173,34 @@ function CurrentResultView({
   return (
     <div className="space-y-3">
       {status && <StatusBanner status={status} total={total} />}
+
+      {/* Explanation Section */}
+      <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
+        <div className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-sm">Analysis</h3>
+                {!explanation && (
+                    <button 
+                        onClick={onExplain}
+                        disabled={isExplaining}
+                        className="text-xs bg-primary text-primary-foreground hover:bg-primary/90 px-3 py-1 rounded-md disabled:opacity-50 transition-colors"
+                    >
+                        {isExplaining ? "Analyzing..." : "Explain Plan"}
+                    </button>
+                )}
+            </div>
+            
+            {explanation ? (
+                <div className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                    {explanation}
+                </div>
+            ) : (
+                <p className="text-xs text-muted-foreground">
+                    Get a detailed analysis of this budget plan, including feasibility and suggestions.
+                </p>
+            )}
+        </div>
+      </div>
 
       {hasSolution && (
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -194,8 +241,7 @@ function CommandCenterEmpty() {
           Command Center
         </h2>
         <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-          Your optimized budget will appear here once you describe your
-          financial situation in the chat.
+          Go to the **Constraints** tab and click **Generate Plan** to see your optimized budget.
         </p>
       </div>
     </div>

@@ -113,179 +113,103 @@ export function ConstraintEditor({
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
+    <Card className="h-full flex flex-col border-none shadow-none">
+      <CardHeader className="pb-3 px-0">
         <CardTitle className="text-sm font-medium flex items-center justify-between">
-          <span>Budget Constraints</span>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={addConstraint}
-            disabled={disabled}
-          >
-            <Plus className="h-4 w-4 mr-1" />
-            Add
-          </Button>
+          <span>Active Constraints</span>
+          <Badge variant="outline" className="text-xs font-normal">
+            {constraints.length} active
+          </Badge>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-3 px-0 flex-1 overflow-y-auto">
         {constraints.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">
-            No constraints defined. Add one to get started.
-          </p>
+          <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground border-2 border-dashed rounded-lg">
+            <Sparkles className="h-8 w-8 mb-2 opacity-50" />
+            <p className="text-sm font-medium">No constraints yet</p>
+            <p className="text-xs mt-1 max-w-[200px]">
+              Ask the AI to "set a budget for dining" or "save for a watch".
+            </p>
+          </div>
         ) : (
           constraints.map((constraint) => (
             <div
               key={constraint.id}
               className={cn(
-                "flex flex-col gap-2 p-3 rounded-lg border",
+                "flex items-center gap-3 p-3 rounded-lg border text-sm",
                 constraint.constraintType === "hard"
-                  ? "border-destructive/30 bg-destructive/5"
-                  : "border-border bg-muted/30"
+                  ? "border-destructive/20 bg-destructive/5"
+                  : "border-border bg-card"
               )}
             >
-              {/* Row 1: Category, Operator, Amount */}
-              <div className="flex items-center gap-2">
-                <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
-
-                <Select
-                  value={constraint.category}
-                  onValueChange={(val) =>
-                    updateConstraint(constraint.id, { category: val })
-                  }
-                  disabled={disabled}
-                >
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue placeholder={constraint.category} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {allCategories.map((cat) => (
-                      <SelectItem key={cat} value={cat}>
-                        {cat.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
-                      </SelectItem>
-                    ))}
-                    <SelectItem value="custom">Custom...</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select
-                  value={constraint.operator}
-                  onValueChange={(val) =>
-                    updateConstraint(constraint.id, {
-                      operator: val as UserConstraint["operator"],
-                    })
-                  }
-                  disabled={disabled}
-                >
-                  <SelectTrigger className="w-[100px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {OPERATORS.map((op) => (
-                      <SelectItem key={op.value} value={op.value}>
-                        {op.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <div className="flex items-center gap-1">
-                  <span className="text-muted-foreground">$</span>
-                  <Input
-                    type="number"
-                    value={constraint.amount}
-                    onChange={(e) =>
-                      updateConstraint(constraint.id, {
-                        amount: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    className="w-24"
-                    disabled={disabled}
-                  />
-                </div>
-
-                <div className="flex-1" />
-                {getSourceBadge(constraint.source)}
-
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => deleteConstraint(constraint.id)}
-                  disabled={disabled}
-                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-
-              {/* Row 2: Type toggle + Priority slider (for soft) */}
-              <div className="flex items-center gap-4 pl-6">
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant={
-                      constraint.constraintType === "hard"
-                        ? "destructive"
-                        : "outline"
-                    }
-                    onClick={() =>
-                      updateConstraint(constraint.id, {
-                        constraintType:
-                          constraint.constraintType === "hard"
-                            ? "soft"
-                            : "hard",
-                      })
-                    }
-                    disabled={disabled}
-                    className="h-7 text-xs"
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-medium capitalize truncate">
+                    {constraint.category.replace(/_/g, " ")}
+                  </span>
+                  {getSourceBadge(constraint.source)}
+                  <Badge 
+                    variant={constraint.constraintType === "hard" ? "destructive" : "secondary"}
+                    className="text-[10px] h-5 px-1.5"
                   >
-                    {constraint.constraintType === "hard"
-                      ? "Must Have"
-                      : "Flexible"}
-                  </Button>
+                    {constraint.constraintType === "hard" ? "Must" : "Flexible"}
+                  </Badge>
                 </div>
-
-                {constraint.constraintType === "soft" && (
-                  <div className="flex items-center gap-2 flex-1">
-                    <span className="text-xs text-muted-foreground">
-                      Priority:
-                    </span>
-                    <Slider
-                      value={[constraint.priority]}
-                      min={0}
-                      max={4}
-                      step={1}
-                      onValueChange={([val]) =>
-                        updateConstraint(constraint.id, { priority: val })
-                      }
-                      disabled={disabled}
-                      className="w-24"
-                    />
-                    <span className="text-xs font-medium w-16">
-                      {PRIORITY_LABELS[constraint.priority]}
-                    </span>
-                  </div>
-                )}
+                
+                <div className="flex items-center text-muted-foreground text-xs">
+                  <span>
+                    {constraint.operator === "==" 
+                      ? "Exactly" 
+                      : constraint.operator === "<=" 
+                        ? "At most" 
+                        : "At least"}
+                  </span>
+                  <span className="font-mono ml-1 text-foreground font-medium">
+                    ${constraint.amount.toLocaleString()}
+                  </span>
+                  {constraint.constraintType === "soft" && (
+                     <span className="ml-2 opacity-70">
+                       (Priority: {PRIORITY_LABELS[constraint.priority]})
+                     </span>
+                  )}
+                </div>
               </div>
+
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => deleteConstraint(constraint.id)}
+                disabled={disabled}
+                className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
             </div>
           ))
         )}
-
-        {onOptimize && constraints.length > 0 && (
+      </CardContent>
+      
+      {onOptimize && (
+        <div className="pt-4 mt-auto">
           <Button
-            className="w-full mt-2"
+            className="w-full"
             onClick={onOptimize}
-            disabled={disabled || optimizing}
+            disabled={disabled || optimizing || constraints.length === 0}
           >
             {optimizing ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Optimizing Plan...
+              </>
             ) : (
-              <Sparkles className="h-4 w-4 mr-2" />
+              <>
+                <Sparkles className="h-4 w-4 mr-2" />
+                Generate Plan
+              </>
             )}
-            {optimizing ? "Optimizing..." : "Optimize Budget"}
           </Button>
-        )}
-      </CardContent>
+        </div>
+      )}
     </Card>
   )
 }

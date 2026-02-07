@@ -12,7 +12,9 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+
 from app.agent import BudgetAgent
+from app.explainer_agent import ExplainerAgent
 from app.nessie_client import get_nessie_client, NessieClient, transform_nessie_to_constraints
 from app.supabase_client import get_supabase_client, require_auth_user_id
 from app.models import (
@@ -32,6 +34,8 @@ from app.models import (
     DashboardCategoryBreakdown,
     DashboardAccount,
     DashboardDemoFlags,
+    ExplainRequest,
+    ExplainResponse,
 )
 from app.solver import solve_from_json
 
@@ -40,6 +44,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Liquidity API", version="1.0.0")
 
 budget_agent = BudgetAgent()
+explainer_agent = ExplainerAgent()
 
 # Configure CORS
 app.add_middleware(
@@ -506,6 +511,22 @@ async def direct_solve(req: DirectSolveRequest):
         return AgentResponse(**result)
     except Exception as e:
         logger.exception("direct_solve failed")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+@app.post("/api/agent/explain", response_model=ExplainResponse)
+async def agent_explain(req: ExplainRequest):
+    """Generate a natural language explanation for a solver result."""
+    try:
+        constraints_dicts = [c.model_dump() for c in req.user_constraints]
+        explanation = await explainer_agent.run(
+            solver_result=req.solver_result,
+            user_constraints=constraints_dicts,
+            original_query=req.original_query
+        )
+        return ExplainResponse(explanation=explanation)
+    except Exception as e:
+        logger.exception("agent_explain failed")
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
