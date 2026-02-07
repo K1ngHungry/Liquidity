@@ -1,199 +1,273 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { apiClient, Item } from '@/lib/api';
+import type React from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { apiClient, AgentResponse } from '@/lib/api';
+
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  solverResult?: Record<string, unknown> | null;
+}
 
 export default function Home() {
-  const [items, setItems] = useState<Item[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [conversation, setConversation] = useState<Record<string, unknown>[]>([]);
   const [apiStatus, setApiStatus] = useState<string>('Checking...');
-  const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
-  const [processResult, setProcessResult] = useState<string>('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    checkApiHealth();
-    fetchItems();
+    apiClient.healthCheck().then(
+      (r) => setApiStatus(`Connected: ${r.message}`),
+      () => setApiStatus('API not responding'),
+    );
   }, []);
 
-  const checkApiHealth = async () => {
-    try {
-      const response = await apiClient.healthCheck();
-      setApiStatus(`✓ ${response.message}`);
-    } catch (error) {
-      setApiStatus('✗ API is not responding');
-      console.error('Health check failed:', error);
-    }
-  };
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
-  const fetchItems = async () => {
+  const sendMessage = async () => {
+    const text = input.trim();
+    if (!text || loading) return;
+
+    setInput('');
+    setMessages((prev) => [...prev, { role: 'user', content: text }]);
+    setLoading(true);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
-      const response = await apiClient.getItems();
-      setItems(response.items);
-    } catch (error) {
-      console.error('Failed to fetch items:', error);
+      const res: AgentResponse = await apiClient.agentSolve({
+        message: text,
+        conversation_history: conversation,
+      });
+
+      if (controller.signal.aborted) return;
+      setConversation(res.conversation);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: res.content,
+          solverResult: res.solver_result,
+        },
+      ]);
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'Something went wrong. Is the backend running?' },
+      ]);
+      console.error(err);
     } finally {
+      abortControllerRef.current = null;
       setLoading(false);
     }
   };
 
-  const handleProcessItem = async () => {
-    setProcessing(true);
-    setProcessResult('');
-    try {
-      const response = await apiClient.processItem({
-        name: 'Test Item',
-        value: 50,
-      });
-      setProcessResult(
-        `Processed: ${response.name} - Original: 50, Processed: ${response.value}`
-      );
-    } catch (error) {
-      setProcessResult('Failed to process item');
-      console.error('Process failed:', error);
-    } finally {
-      setProcessing(false);
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      <div className="container mx-auto px-4 py-16">
-        {/* Header */}
-        <div className="text-center mb-16">
-          <h1 className="text-6xl font-bold text-white mb-4 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600">
-            Liquidity Platform
-          </h1>
-          <p className="text-xl text-gray-300">
-            Next.js + FastAPI Boilerplate
-          </p>
-        </div>
+  const resetChat = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setLoading(false);
+    setInput('');
+    setMessages([]);
+    setConversation([]);
+  };
 
-        {/* API Status Card */}
-        <div className="max-w-4xl mx-auto mb-8">
-          <div className="backdrop-blur-lg bg-white/10 rounded-2xl p-8 shadow-2xl border border-white/20">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-semibold text-white">API Status</h2>
-              <span
-                className={`px-4 py-2 rounded-full text-sm font-medium ${
-                  apiStatus.startsWith('✓')
-                    ? 'bg-green-500/20 text-green-300 border border-green-500/50'
-                    : 'bg-red-500/20 text-red-300 border border-red-500/50'
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col">
+      {/* Header */}
+      <header className="border-b border-white/10 px-6 py-4 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600">
+            Liquidity
+          </h1>
+          <p className="text-sm text-gray-400">Budget Constraint Solver</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <span
+            className={`text-xs px-3 py-1 rounded-full ${
+              apiStatus.startsWith('Connected')
+                ? 'bg-green-500/20 text-green-300 border border-green-500/50'
+                : 'bg-red-500/20 text-red-300 border border-red-500/50'
+            }`}
+          >
+            {apiStatus}
+          </span>
+          <button
+            onClick={resetChat}
+            className="text-xs text-gray-400 hover:text-white transition-colors px-3 py-1 border border-white/20 rounded-lg hover:border-white/40"
+          >
+            New chat
+          </button>
+        </div>
+      </header>
+
+      {/* Chat area */}
+      <div className="flex-1 overflow-y-auto px-4 py-6">
+        <div className="max-w-3xl mx-auto space-y-4">
+          {messages.length === 0 && (
+            <div className="text-center py-20">
+              <h2 className="text-3xl font-bold text-white mb-3">
+                Describe your budget
+              </h2>
+              <p className="text-gray-400 max-w-md mx-auto mb-8">
+                Tell me your income, spending categories, and constraints.
+                I&apos;ll find an optimal allocation for you.
+              </p>
+              <div className="grid sm:grid-cols-2 gap-3 max-w-lg mx-auto">
+                {[
+                  'I make $5000/month. Rent is $1500. I want to save at least $1000 and keep dining under $400.',
+                  'Monthly income $8000. Mortgage $2200, car payment $450. Maximize savings but try to keep entertainment under $500.',
+                ].map((example) => (
+                  <button
+                    key={example}
+                    onClick={() => setInput(example)}
+                    className="text-left text-sm text-gray-300 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-purple-500/50 rounded-xl p-4 transition-all"
+                  >
+                    {example}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {messages.map((msg, i) => (
+            <div
+              key={i}
+              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[80%] rounded-2xl px-5 py-3 ${
+                  msg.role === 'user'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-white/10 text-gray-100 border border-white/10'
                 }`}
               >
-                {apiStatus}
-              </span>
-            </div>
-          </div>
-        </div>
+                <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                  {msg.content}
+                </div>
 
-        {/* Main Content Grid */}
-        <div className="max-w-4xl mx-auto grid md:grid-cols-2 gap-8">
-          {/* Items List Card */}
-          <div className="backdrop-blur-lg bg-white/10 rounded-2xl p-8 shadow-2xl border border-white/20 hover:border-purple-500/50 transition-all duration-300">
-            <h2 className="text-2xl font-semibold text-white mb-6">
-              Items from API
-            </h2>
-            {loading ? (
-              <div className="text-gray-300 text-center py-8">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto"></div>
-              </div>
-            ) : (
-              <ul className="space-y-3">
-                {items.map((item) => (
-                  <li
-                    key={item.id}
-                    className="bg-white/5 rounded-lg p-4 hover:bg-white/10 transition-colors duration-200 border border-white/10"
-                  >
-                    <div className="flex justify-between items-center">
-                      <span className="text-white font-medium">{item.name}</span>
-                      <span className="text-purple-400 font-semibold">
-                        ${item.value}
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {/* Process Item Card */}
-          <div className="backdrop-blur-lg bg-white/10 rounded-2xl p-8 shadow-2xl border border-white/20 hover:border-pink-500/50 transition-all duration-300">
-            <h2 className="text-2xl font-semibold text-white mb-6">
-              Process Item
-            </h2>
-            <p className="text-gray-300 mb-6">
-              Test the API by processing an item. The backend will double the value.
-            </p>
-            <button
-              onClick={handleProcessItem}
-              disabled={processing}
-              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
-            >
-              {processing ? (
-                <span className="flex items-center justify-center">
-                  <svg
-                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  Processing...
-                </span>
-              ) : (
-                'Process Test Item'
-              )}
-            </button>
-            {processResult && (
-              <div className="mt-4 p-4 bg-green-500/20 border border-green-500/50 rounded-lg">
-                <p className="text-green-300 text-sm">{processResult}</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Tech Stack Info */}
-        <div className="max-w-4xl mx-auto mt-12">
-          <div className="backdrop-blur-lg bg-white/5 rounded-2xl p-8 border border-white/10">
-            <h3 className="text-xl font-semibold text-white mb-4">
-              Tech Stack
-            </h3>
-            <div className="grid md:grid-cols-2 gap-6 text-gray-300">
-              <div>
-                <h4 className="text-purple-400 font-semibold mb-2">Frontend</h4>
-                <ul className="space-y-1 text-sm">
-                  <li>• Next.js 15 with App Router</li>
-                  <li>• TypeScript</li>
-                  <li>• Tailwind CSS</li>
-                  <li>• React 19</li>
-                </ul>
-              </div>
-              <div>
-                <h4 className="text-pink-400 font-semibold mb-2">Backend</h4>
-                <ul className="space-y-1 text-sm">
-                  <li>• FastAPI</li>
-                  <li>• Python 3.8+</li>
-                  <li>• Uvicorn</li>
-                  <li>• Pydantic</li>
-                </ul>
+                {/* Solver result details */}
+                {msg.solverResult && (
+                  <SolverDetails result={msg.solverResult} />
+                )}
               </div>
             </div>
-          </div>
+          ))}
+
+          {loading && (
+            <div className="flex justify-start">
+              <div className="bg-white/10 border border-white/10 rounded-2xl px-5 py-3">
+                <div className="flex gap-1">
+                  <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
         </div>
       </div>
+
+      {/* Input area */}
+      <div className="border-t border-white/10 px-4 py-4">
+        <div className="max-w-3xl mx-auto flex gap-3">
+          <textarea
+            aria-label="Budget constraints input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Describe your budget constraints..."
+            rows={1}
+            className="flex-1 bg-white/10 text-white placeholder-gray-500 border border-white/20 focus:border-purple-500 rounded-xl px-4 py-3 resize-none outline-none text-sm transition-colors"
+          />
+          <button
+            onClick={sendMessage}
+            disabled={loading || !input.trim()}
+            className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium px-6 rounded-xl transition-all text-sm"
+          >
+            Send
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SolverDetails({ result }: { result: Record<string, unknown> }) {
+  const [open, setOpen] = useState(false);
+  const solution = result.solution as Record<string, number> | undefined;
+  const satisfied = result.satisfied_constraints as string[] | undefined;
+  const dropped = result.dropped_constraints as string[] | undefined;
+
+  if (!solution || Object.keys(solution).length === 0) return null;
+
+  return (
+    <div className="mt-3 border-t border-white/10 pt-3">
+      <button
+        onClick={() => setOpen(!open)}
+        className="text-xs text-purple-300 hover:text-purple-200 transition-colors"
+      >
+        {open ? 'Hide' : 'Show'} solver details
+      </button>
+      {open && (
+        <div className="mt-2 space-y-2 text-xs">
+          <div>
+            <span className="text-gray-400">Status:</span>{' '}
+            <span className="text-green-300">{result.status as string}</span>
+          </div>
+          <div>
+            <span className="text-gray-400">Allocation:</span>
+            <ul className="mt-1 space-y-1">
+              {Object.entries(solution)
+                .sort(([, a], [, b]) => b - a)
+                .map(([name, value]) => (
+                  <li key={name} className="flex justify-between">
+                    <span className="text-gray-300">{name}</span>
+                    <span className="text-white font-medium">${value.toLocaleString()}</span>
+                  </li>
+                ))}
+            </ul>
+          </div>
+          {satisfied && satisfied.length > 0 && (
+            <div>
+              <span className="text-gray-400">Satisfied:</span>
+              <ul className="mt-1 space-y-0.5">
+                {satisfied.map((c, i) => (
+                  <li key={i} className="text-green-300/80">+ {c}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {dropped && dropped.length > 0 && (
+            <div>
+              <span className="text-gray-400">Relaxed:</span>
+              <ul className="mt-1 space-y-0.5">
+                {dropped.map((c, i) => (
+                  <li key={i} className="text-yellow-300/80">~ {c}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

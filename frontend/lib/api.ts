@@ -22,6 +22,18 @@ export interface HealthResponse {
   message: string;
 }
 
+export interface AgentRequest {
+  message: string;
+  conversation_history: Record<string, unknown>[];
+}
+
+export interface AgentResponse {
+  type: "question" | "solution";
+  content: string;
+  solver_result: Record<string, unknown> | null;
+  conversation: Record<string, unknown>[];
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -44,7 +56,9 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      throw new Error(`API Error: ${response.statusText}`);
+      const body = await response.json().catch(() => null);
+      const detail = body?.detail || response.statusText;
+      throw new Error(`API Error: ${detail}`);
     }
 
     return response.json();
@@ -66,6 +80,13 @@ class ApiClient {
     return this.request<ItemResponse>("/api/process", {
       method: "POST",
       body: JSON.stringify(item),
+    });
+  }
+
+  async agentSolve(req: AgentRequest): Promise<AgentResponse> {
+    return this.request<AgentResponse>("/api/agent/solve", {
+      method: "POST",
+      body: JSON.stringify(req),
     });
   }
 }
