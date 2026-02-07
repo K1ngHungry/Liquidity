@@ -8,35 +8,37 @@ import {
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { getFinancialSummary } from "@/lib/data"
+import type { DashboardSummary } from "@/lib/api"
 
-export function StatCards() {
-  const summary = getFinancialSummary()
+export function StatCards({ summary }: { summary?: DashboardSummary }) {
+  const fallback = getFinancialSummary()
+  const resolved = summary ?? fallback
 
   const stats = [
     {
       label: "Total Balance",
-      value: `$${summary.totalBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+      value: `$${resolved.totalBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
       change: "+2.4%",
       trend: "up" as const,
       icon: Wallet,
     },
     {
       label: "Monthly Income",
-      value: `$${summary.monthlyIncome.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+      value: `$${resolved.monthlyIncome.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
       change: "+5.1%",
       trend: "up" as const,
       icon: TrendingUp,
     },
     {
       label: "Monthly Expenses",
-      value: `$${summary.monthlyExpenses.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
-      change: `${summary.monthOverMonth}%`,
+      value: `$${resolved.monthlyExpenses.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+      change: `${resolved.monthOverMonth}%`,
       trend: "down" as const,
       icon: TrendingDown,
     },
     {
       label: "Savings Rate",
-      value: `${summary.savingsRate}%`,
+      value: `${resolved.savingsRate}%`,
       change: "+3.2%",
       trend: "up" as const,
       icon: PiggyBank,

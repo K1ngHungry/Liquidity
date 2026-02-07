@@ -1,9 +1,10 @@
 import { ArrowDownLeft, ArrowUpRight } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { getTransactions, CATEGORY_COLORS } from "@/lib/data"
+import type { DashboardTransaction } from "@/lib/api"
 
-export function RecentTransactions() {
-  const transactions = getTransactions().slice(0, 8)
+export function RecentTransactions({ transactions }: { transactions?: DashboardTransaction[] }) {
+  const resolved = (transactions && transactions.length > 0 ? transactions : getTransactions()).slice(0, 8)
 
   return (
     <Card className="border-border bg-card">
@@ -17,7 +18,7 @@ export function RecentTransactions() {
       </CardHeader>
       <CardContent>
         <div className="flex flex-col gap-3">
-          {transactions.map((tx) => (
+          {resolved.map((tx) => (
             <div
               key={tx.id}
               className="flex items-center justify-between rounded-lg bg-secondary/50 px-3 py-2.5"

@@ -81,6 +81,17 @@ their original goals.
 
 Keep the tone concise, friendly, and actionable. Do NOT repeat the full allocation \
 table or budget health metrics — the UI renders those automatically from solver data.
+
+## Recognizing purchase goals and spending limits
+
+**CRITICAL**: When the user mentions wanting to buy something, save for something, or set a spending limit, you MUST call the add_user_constraint tool IMMEDIATELY. Do NOT just acknowledge it in text - actually call the tool.
+
+Examples that REQUIRE calling add_user_constraint:
+- "I want to buy a $2000 watch" → MUST call add_user_constraint with category="watch", amount=2000, operator=">=", constraint_type="hard", description="Purchase $2000 watch"
+- "I'd like to save $500 for a trip" → MUST call add_user_constraint with category="trip_savings", amount=500, operator=">=", constraint_type="soft", priority=1, description="Save for trip"
+- "Try to keep dining under $300" → MUST call add_user_constraint with category="dining", amount=300, operator="<=", constraint_type="soft", priority=2, description="Limit dining to $300"
+
+Call add_user_constraint FIRST, THEN ask follow-up questions about their budget. The constraint will appear in the UI.
 """
 
 
@@ -91,6 +102,54 @@ table or budget health metrics — the UI renders those automatically from solve
 _ctx_last_solver_result: ContextVar[dict | None] = ContextVar(
     "_ctx_last_solver_result", default=None
 )
+_ctx_new_constraints: ContextVar[list[dict] | None] = ContextVar(
+    "_ctx_new_constraints", default=None
+)
+
+
+def add_user_constraint(constraint_json: str) -> str:
+    """Add a budget constraint based on user's purchase or spending goal.
+
+    Call this when the user mentions wanting to buy something or sets a spending goal.
+    Examples:
+    - "I want to buy a $2000 watch" -> add constraint for watch >= 2000
+    - "I need to save $500 for a trip" -> add constraint for trip >= 500
+    - "I want to limit dining to $300" -> add constraint for dining <= 300
+
+    Args:
+        constraint_json: A JSON string with the constraint details:
+            {
+                "category": "watch",  # lowercase, underscores for spaces
+                "operator": ">=",     # "<=", ">=", or "=="
+                "amount": 2000,       # dollar amount
+                "constraint_type": "hard",  # "hard" or "soft"
+                "priority": 1,        # 0-4, only for soft constraints
+                "description": "Purchase $2000 watch"  # human-readable
+            }
+
+    Returns:
+        Confirmation message.
+    """
+    import uuid
+    try:
+        constraint = json.loads(constraint_json)
+    except (json.JSONDecodeError, ValueError) as e:
+        logger.error("Agent failed to parse constraint JSON: %s. Error: %s", constraint_json, e)
+        return json.dumps({"status": "error", "message": "malformed constraint JSON", "details": str(e)})
+
+    # Add unique ID and source
+    constraint["id"] = f"ai-{uuid.uuid4().hex[:8]}"
+    constraint["source"] = "ai"
+    
+    # Get current constraints and append
+    current = _ctx_new_constraints.get()
+    if current is None:
+        current = []
+    current.append(constraint)
+    _ctx_new_constraints.set(current)
+    
+    logger.info("Agent added constraint: %s", constraint)
+    return json.dumps({"status": "added", "constraint": constraint})
 
 
 def create_constraint_problem(problem_json: str) -> str:
@@ -199,6 +258,10 @@ class BudgetAgent:
 
         messages = list(conversation_history or [])
 
+        # Reset context variables for this request
+        _ctx_last_solver_result.set(None)
+        _ctx_new_constraints.set(None)
+
         # Ensure system prompt is the first message
         if not messages or messages[0].get("role") != "system":
             messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
@@ -206,6 +269,7 @@ class BudgetAgent:
         messages.append({"role": "user", "content": user_message})
 
         logger.info("Sending %d messages to Dedalus runner", len(messages))
+        logger.info("Available tools: %s", [create_constraint_problem.__name__, add_user_constraint.__name__])
 
         # The DedalusRunner handles the full tool-calling loop automatically:
         # it calls the model, executes any tool the model invokes, feeds the
@@ -213,9 +277,10 @@ class BudgetAgent:
         result = await self.runner.run(
             messages=messages,
             model=self.model,
-            tools=[create_constraint_problem],
+            tools=[create_constraint_problem, add_user_constraint],
         )
 
+        logger.info("New constraints after run: %s", _ctx_new_constraints.get())
         updated_conversation = self._sanitize_conversation(result.to_input_list())
 
         # Try ContextVar first; fall back to extracting from conversation history
@@ -226,6 +291,9 @@ class BudgetAgent:
             solver_result = self._extract_solver_result(updated_conversation)
 
         solver_input = self._extract_solver_input(updated_conversation)
+        new_constraints = self._extract_new_constraints(updated_conversation)
+        
+        logger.info("Extracted new_constraints from conversation: %s", new_constraints)
 
         if solver_result is not None:
             return {
@@ -234,6 +302,7 @@ class BudgetAgent:
                 "solver_result": solver_result,
                 "solver_input": solver_input,
                 "recommendations": self._compute_recommendations(solver_result),
+                "new_constraints": new_constraints,
                 "conversation": updated_conversation,
             }
 
@@ -243,6 +312,7 @@ class BudgetAgent:
             "solver_result": None,
             "solver_input": None,
             "recommendations": [],
+            "new_constraints": new_constraints,
             "conversation": updated_conversation,
         }
 
@@ -284,6 +354,26 @@ class BudgetAgent:
                     except (json.JSONDecodeError, TypeError):
                         continue
         return None
+
+    @staticmethod
+    def _extract_new_constraints(
+        conversation: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Extract constraints added via add_user_constraint from tool responses."""
+        constraints = []
+        for msg in conversation:
+            if msg.get("role") == "tool":
+                try:
+                    content = msg.get("content")
+                    if isinstance(content, dict):
+                        data = content
+                    else:
+                        data = json.loads(content)
+                    if data.get("status") == "added" and "constraint" in data:
+                        constraints.append(data["constraint"])
+                except (json.JSONDecodeError, KeyError, TypeError):
+                    continue
+        return constraints
 
     @staticmethod
     def _compute_recommendations(

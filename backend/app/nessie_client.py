@@ -62,6 +62,20 @@ class NessieClient:
         response.raise_for_status()
         return response.json()
 
+    async def get_account_purchases(self, account_id: str) -> List[Dict]:
+        """Get all purchases for an account."""
+        url = self._build_url(f"accounts/{account_id}/purchases")
+        response = await self.client.get(url)
+        response.raise_for_status()
+        return response.json()
+
+    async def get_account_deposits(self, account_id: str) -> List[Dict]:
+        """Get all deposits for an account."""
+        url = self._build_url(f"accounts/{account_id}/deposits")
+        response = await self.client.get(url)
+        response.raise_for_status()
+        return response.json()
+
     async def close(self):
         """Close HTTP client."""
         await self.client.aclose()

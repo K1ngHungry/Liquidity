@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { apiClient, type AgentResponse, type Recommendation } from "@/lib/api"
+import { apiClient, type AgentResponse, type Recommendation, type UserConstraint } from "@/lib/api"
 import { CommandCenter } from "@/components/chat/command-center"
 import { CopilotChat } from "@/components/chat/copilot-chat"
 import {
@@ -38,6 +38,19 @@ export default function ChatPage() {
     Recommendation[]
   >([])
 
+  // Constraint state for the form-based editor
+  const [constraints, setConstraints] = useState<UserConstraint[]>([])
+  const [categories, setCategories] = useState<string[]>([
+    "Housing",
+    "Groceries",
+    "Dining",
+    "Transport",
+    "Entertainment",
+    "Savings",
+    "Utilities",
+    "Healthcare",
+  ])
+
   // Auth session
   const [session, setSession] = useState<Session | null>(null)
 
@@ -63,6 +76,44 @@ export default function ChatPage() {
       .healthCheck()
       .catch((err) => console.error("API Health check failed", err))
   }, [])
+
+  // Fetch Nessie dashboard and populate initial constraints
+  useEffect(() => {
+    const loadDashboardConstraints = async () => {
+      if (!session?.access_token) return
+      
+      try {
+        const dashboard = await apiClient.getNessieDashboard(session.access_token)
+        
+        // Generate constraints from category breakdown
+        if (dashboard.categoryBreakdown && dashboard.categoryBreakdown.length > 0) {
+          const nessieConstraints: UserConstraint[] = dashboard.categoryBreakdown.map(
+            (cat, idx) => ({
+              id: `nessie-${idx}`,
+              category: cat.category.toLowerCase().replace(/\s+/g, "_"),
+              operator: "<=" as const,
+              amount: Math.round(cat.amount * 1.2), // 120% of historical
+              constraint_type: "soft" as const,
+              priority: 2,
+              description: `${cat.category} (historical: $${Math.round(cat.amount)})`,
+              source: "nessie" as const,
+            })
+          )
+          setConstraints((prev) => (prev && prev.length > 0 ? prev : nessieConstraints))
+
+          // Update categories from dashboard
+          const dashCategories = dashboard.categoryBreakdown.map((c) => c.category)
+          if (dashCategories.length > 0) {
+            setCategories((prev) => (prev && prev.length > 0 ? prev : [...new Set([...dashCategories, "Savings"])]))
+          }
+        }
+      } catch (err) {
+        console.log("Could not load Nessie dashboard for constraints:", err)
+      }
+    }
+
+    loadDashboardConstraints()
+  }, [session])
 
   const sendMessage = async (textOverride?: string) => {
     const text = textOverride || input.trim()
@@ -93,6 +144,24 @@ export default function ChatPage() {
           return res.solver_result
         })
         setCurrentRecommendations(res.recommendations)
+      }
+
+      // Merge any new constraints from agent
+      console.log("[Agent Response] new_constraints:", res.new_constraints)
+      if (res.new_constraints && res.new_constraints.length > 0) {
+        setConstraints((prev) => [
+          ...prev,
+          ...res.new_constraints.map((c, idx) => ({
+            id: String(c.id || `ai-${Date.now()}-${idx}`),
+            category: String(c.category),
+            operator: (c.operator as string) as "<=" | ">=" | "==",
+            amount: Number(c.amount),
+            constraint_type: (c.constraint_type as string) as "hard" | "soft",
+            priority: Number(c.priority ?? 2),
+            description: String(c.description || ""),
+            source: "ai" as const,
+          })),
+        ])
       }
 
       setConversation(res.conversation)
@@ -153,6 +222,9 @@ export default function ChatPage() {
             currentResult={currentResult}
             previousResult={previousResult}
             recommendations={currentRecommendations}
+            constraints={constraints}
+            categories={categories}
+            onConstraintsChange={setConstraints}
           />
         </ResizablePanel>
 

@@ -11,9 +11,10 @@ import {
 } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { getMonthlySpending } from "@/lib/data"
+import type { DashboardMonthlySpending } from "@/lib/api"
 
-export function SpendingChart() {
-  const data = getMonthlySpending()
+export function SpendingChart({ data }: { data?: DashboardMonthlySpending[] }) {
+  const resolved = data && data.length > 0 ? data : getMonthlySpending()
 
   return (
     <Card className="border-border bg-card">
@@ -28,7 +29,7 @@ export function SpendingChart() {
       <CardContent>
         <div className="h-[280px]">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <AreaChart data={resolved} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="spendingGradient" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#9FC490" stopOpacity={0.3} />

@@ -11,7 +11,14 @@ import { AuthForm } from "@/components/auth-form"
 import { UserRegistrationForm } from "@/components/user-registration-form"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { apiClient, type NessieMappingResponse } from "@/lib/api"
+import { apiClient, type NessieMappingResponse, type DashboardResponse } from "@/lib/api"
+import {
+  getFinancialSummary,
+  getMonthlySpending,
+  getCategoryBreakdown,
+  getBudgets,
+  getTransactions,
+} from "@/lib/data"
 import { supabase } from "@/lib/supabase"
 import { Loader2, Sparkles } from "lucide-react"
 
@@ -22,6 +29,8 @@ export default function DashboardPage() {
   const [nessieMapping, setNessieMapping] = useState<NessieMappingResponse | null>(null)
   const [isOptimizing, setIsOptimizing] = useState(false)
   const [optimizationResult, setOptimizationResult] = useState<any>(null)
+  const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null)
+  const [dashboardLoading, setDashboardLoading] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -42,6 +51,7 @@ export default function DashboardPage() {
     const accessToken = session?.access_token
     if (!accessToken) {
       setNessieMapping(null)
+      setDashboardData(null)
       return
     }
     setMappingLoading(true)
@@ -52,6 +62,20 @@ export default function DashboardPage() {
       .finally(() => setMappingLoading(false))
   }, [session?.access_token])
 
+  useEffect(() => {
+    const accessToken = session?.access_token
+    if (!accessToken || !nessieMapping) {
+      setDashboardData(null)
+      return
+    }
+    setDashboardLoading(true)
+    apiClient
+      .getNessieDashboard(accessToken)
+      .then((data) => setDashboardData(data))
+      .catch(() => setDashboardData(null))
+      .finally(() => setDashboardLoading(false))
+  }, [session?.access_token, nessieMapping?.nessie_customer_id])
+
   const handleRegisterSuccess = (mapping: NessieMappingResponse) => {
     setNessieMapping(mapping)
   }
@@ -60,6 +84,7 @@ export default function DashboardPage() {
     await supabase.auth.signOut()
     setNessieMapping(null)
     setOptimizationResult(null)
+    setDashboardData(null)
   }
 
   const handleOptimize = async () => {
@@ -122,8 +147,55 @@ export default function DashboardPage() {
     )
   }
 
+  if (dashboardLoading) {
+    return (
+      <div className="flex flex-col gap-6 items-center justify-center min-h-[60vh]">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  const demoFallback = {
+    summary: getFinancialSummary(),
+    monthlySpending: getMonthlySpending(),
+    categoryBreakdown: getCategoryBreakdown(),
+    budgets: getBudgets(),
+    transactions: getTransactions(),
+  }
+
+  const demoFlags = dashboardData?.demoFlags ?? {
+    summary: true,
+    transactions: true,
+    bills: true,
+    monthlySpending: true,
+    categoryBreakdown: true,
+    budgets: true,
+  }
+
+  const resolvedSummary = demoFlags.summary || !dashboardData ? demoFallback.summary : dashboardData.summary
+  const resolvedMonthlySpending =
+    demoFlags.monthlySpending || !dashboardData ? demoFallback.monthlySpending : dashboardData.monthlySpending
+  const resolvedCategoryBreakdown =
+    demoFlags.categoryBreakdown || !dashboardData ? demoFallback.categoryBreakdown : dashboardData.categoryBreakdown
+  const resolvedBudgets =
+    demoFlags.budgets || !dashboardData ? demoFallback.budgets : dashboardData.budgets
+  const resolvedTransactions =
+    demoFlags.transactions || !dashboardData ? demoFallback.transactions : dashboardData.transactions
+
+  const usingDemoData = Object.values(demoFlags).some(Boolean)
+
   return (
     <div className="flex flex-col gap-6">
+      {usingDemoData && (
+        <Card className="border-amber-400/40 bg-amber-500/10">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-amber-200">Using Demo Data</CardTitle>
+            <CardDescription className="text-amber-100/80">
+              Some Nessie data is unavailable. The dashboard is showing demo values where needed.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
       <div className="flex justify-between items-end">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
@@ -202,20 +274,20 @@ export default function DashboardPage() {
         )
       })()}
 
-      <StatCards />
+      <StatCards summary={resolvedSummary} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <SpendingChart />
+          <SpendingChart data={resolvedMonthlySpending} />
         </div>
         <div>
-          <CategoryBreakdown />
+          <CategoryBreakdown data={resolvedCategoryBreakdown} />
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <BudgetTracker />
-        <RecentTransactions />
+        <BudgetTracker budgets={resolvedBudgets} />
+        <RecentTransactions transactions={resolvedTransactions} />
       </div>
     </div>
   )
