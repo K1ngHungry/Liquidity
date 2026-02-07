@@ -397,6 +397,7 @@ async def get_dashboard_data(auth_user_id: str = Depends(require_auth_user_id)):
 
         purchases: list[dict[str, Any]] = []
         bills: list[dict[str, Any]] = []
+        deposits: list[dict[str, Any]] = []
 
         for account in accounts:
             account_id = account.get("_id") or account.get("id")
@@ -410,8 +411,12 @@ async def get_dashboard_data(auth_user_id: str = Depends(require_auth_user_id)):
                 bills.extend(await nessie.get_account_bills(account_id))
             except Exception as e:
                 logger.warning(f"Failed to fetch bills for account {account_id}: {e}")
+            try:
+                deposits.extend(await nessie.get_account_deposits(account_id))
+            except Exception as e:
+                logger.warning(f"Failed to fetch deposits for account {account_id}: {e}")
 
-        return _build_dashboard_response(accounts, purchases, bills)
+        return _build_dashboard_response(accounts, purchases, bills, deposits)
     except HTTPException:
         raise
     except Exception as e:
