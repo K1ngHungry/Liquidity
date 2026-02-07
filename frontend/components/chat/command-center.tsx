@@ -241,7 +241,7 @@ function CommandCenterEmpty() {
           Command Center
         </h2>
         <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-          Go to the **Constraints** tab and click **Generate Plan** to see your optimized budget.
+          Go to the <span className="font-semibold text-foreground">Constraints</span> tab and click <span className="font-semibold text-foreground">Generate Plan</span> to see your optimized budget.
         </p>
       </div>
     </div>

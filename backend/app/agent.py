@@ -214,8 +214,7 @@ class BudgetAgent:
             "\n\n## Current financial context (from bank data + user settings)",
             "The user already has the following constraints set up in the UI. "
             "You do NOT need to ask for this information — use it directly when "
-            "building the solver problem. Include ALL of these constraints when "
-            "calling create_constraint_problem.\n",
+            "evaluating new requests.\n",
         ]
         for c in user_constraints:
             cat = c.get("category", "unknown")
@@ -231,9 +230,9 @@ class BudgetAgent:
             lines.append(f"- {cat} {op} ${amt:,.0f}  [{type_label}] ({source_label}) {desc}")
 
         lines.append(
-            "\nWhen the user asks to add a new goal or purchase, add it as a "
-            "new constraint via add_user_constraint AND THEN call create_constraint_problem "
-            "with ALL constraints (existing + new) to solve immediately."
+            "\nWhen the user asks to add a new goal or purchase, call "
+            "add_user_constraint immediately. Do NOT call create_constraint_problem. "
+            "The UI manages the solving process separate from your conversation."
         )
         return "\n".join(lines)
 

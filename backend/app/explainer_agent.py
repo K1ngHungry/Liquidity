@@ -5,6 +5,7 @@ handling both feasible and infeasible scenarios.
 """
 import json
 import logging
+import asyncio
 from typing import Any, Dict, List
 
 from dedalus_labs import AsyncDedalus, DedalusRunner
@@ -94,10 +95,19 @@ class ExplainerAgent:
         logger.info("ExplainerAgent generating response for status: %s", status)
         
         # We don't need tools for explanation, just text generation
-        result = await self.runner.run(
-            messages=messages,
-            model=self.model,
-            tools=[] 
-        )
-
-        return result.final_output
+        try:
+            result = await asyncio.wait_for(
+                self.runner.run(
+                    messages=messages,
+                    model=self.model,
+                    tools=[] 
+                ),
+                timeout=45.0
+            )
+            return result.final_output
+        except asyncio.TimeoutError:
+            logger.error("ExplainerAgent timed out")
+            return "Analysis timed out. Please try again."
+        except Exception as e:
+            logger.exception("ExplainerAgent failed")
+            return "An error occurred while generating the explanation."

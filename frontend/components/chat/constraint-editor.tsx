@@ -169,7 +169,7 @@ export function ConstraintEditor({
                   </span>
                   {constraint.constraintType === "soft" && (
                      <span className="ml-2 opacity-70">
-                       (Priority: {PRIORITY_LABELS[constraint.priority]})
+                       (Priority: {PRIORITY_LABELS[constraint.priority] ?? "Unknown"})
                      </span>
                   )}
                 </div>
@@ -180,6 +180,7 @@ export function ConstraintEditor({
                 variant="ghost"
                 onClick={() => deleteConstraint(constraint.id)}
                 disabled={disabled}
+                aria-label={`Delete ${constraint.description || constraint.category} constraint`}
                 className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
               >
                 <Trash2 className="h-4 w-4" />
