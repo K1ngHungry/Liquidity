@@ -31,12 +31,12 @@ export function RecentTransactions({ transactions }: { transactions?: DashboardT
                   }}
                 >
                   {tx.type === "credit" ? (
-                    <ArrowDownLeft
+                    <ArrowUpRight
                       className="h-4 w-4"
                       style={{ color: CATEGORY_COLORS[tx.category] || "#6b7280" }}
                     />
                   ) : (
-                    <ArrowUpRight
+                    <ArrowDownLeft
                       className="h-4 w-4"
                       style={{ color: CATEGORY_COLORS[tx.category] || "#6b7280" }}
                     />

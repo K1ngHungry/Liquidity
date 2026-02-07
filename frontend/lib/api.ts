@@ -109,6 +109,7 @@ export interface DashboardAccount {
 
 export interface DashboardDemoFlags {
   summary: boolean;
+  income: boolean;
   transactions: boolean;
   bills: boolean;
   deposits: boolean;
@@ -264,8 +265,9 @@ class ApiClient {
     });
   }
 
-  async getNessieDashboard(accessToken: string): Promise<DashboardResponse> {
-    return this.request<DashboardResponse>("/api/nessie/dashboard", {
+  async getNessieDashboard(accessToken: string, refresh = false): Promise<DashboardResponse> {
+    const query = refresh ? "?refresh=true" : "";
+    return this.request<DashboardResponse>(`/api/nessie/dashboard${query}`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${accessToken}`,

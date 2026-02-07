@@ -20,7 +20,7 @@ import {
   getTransactions,
 } from "@/lib/data"
 import { supabase } from "@/lib/supabase"
-import { Loader2, Sparkles } from "lucide-react"
+import { Loader2, Sparkles, RefreshCw } from "lucide-react"
 
 export default function DashboardPage() {
   const [session, setSession] = useState<Session | null>(null)
@@ -68,12 +68,27 @@ export default function DashboardPage() {
       setDashboardData(null)
       return
     }
-    setDashboardLoading(true)
-    apiClient
-      .getNessieDashboard(accessToken)
-      .then((data) => setDashboardData(data))
-      .catch(() => setDashboardData(null))
-      .finally(() => setDashboardLoading(false))
+    let cancelled = false
+
+    const fetchDashboard = async (showLoading: boolean) => {
+      if (showLoading) setDashboardLoading(true)
+      try {
+        const data = await apiClient.getNessieDashboard(accessToken)
+        if (!cancelled) setDashboardData(data)
+      } catch {
+        if (!cancelled) setDashboardData(null)
+      } finally {
+        if (showLoading && !cancelled) setDashboardLoading(false)
+      }
+    }
+
+    fetchDashboard(true)
+    const interval = setInterval(() => fetchDashboard(false), 30000)
+
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
   }, [session?.access_token, nessieMapping?.nessie_customer_id])
 
   const handleRegisterSuccess = (mapping: NessieMappingResponse) => {
@@ -85,6 +100,21 @@ export default function DashboardPage() {
     setNessieMapping(null)
     setOptimizationResult(null)
     setDashboardData(null)
+  }
+
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const handleRefreshDashboard = async () => {
+    if (!session?.access_token) return
+    setIsRefreshing(true)
+    try {
+      const data = await apiClient.getNessieDashboard(session.access_token, true)
+      setDashboardData(data)
+    } catch {
+      // keep existing data on error
+    } finally {
+      setIsRefreshing(false)
+    }
   }
 
   const handleOptimize = async () => {
@@ -168,6 +198,7 @@ export default function DashboardPage() {
 
   const demoFlags = dashboardData?.demoFlags ?? {
     summary: true,
+    income: true,
     transactions: true,
     bills: true,
     deposits: true,
@@ -177,6 +208,10 @@ export default function DashboardPage() {
   }
 
   const resolvedSummary = demoFlags.summary || !dashboardData ? demoFallback.summary : dashboardData.summary
+  const resolvedSummaryWithIncome =
+    demoFlags.income && dashboardData
+      ? { ...resolvedSummary, monthlyIncome: demoFallback.summary.monthlyIncome }
+      : resolvedSummary
   const resolvedMonthlySpending =
     demoFlags.monthlySpending || !dashboardData ? demoFallback.monthlySpending : dashboardData.monthlySpending
   const resolvedCategoryBreakdown =
@@ -208,6 +243,10 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleRefreshDashboard} disabled={isRefreshing} className="gap-2">
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
           <Button onClick={handleOptimize} disabled={isOptimizing} className="gap-2">
             {isOptimizing ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -278,7 +317,7 @@ export default function DashboardPage() {
         )
       })()}
 
-      <StatCards summary={resolvedSummary} />
+      <StatCards summary={resolvedSummaryWithIncome} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">

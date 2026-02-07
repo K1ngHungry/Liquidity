@@ -51,17 +51,17 @@ export function CategoryBreakdown({ data }: { data?: DashboardCategoryBreakdown[
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="flex flex-1 flex-col gap-2">
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
             {resolved.map((item) => (
-              <div key={item.category} className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
+              <div key={item.category} className="flex min-w-0 items-center justify-between gap-3 text-sm">
+                <div className="flex min-w-0 items-center gap-2">
                   <div
                     className="h-2.5 w-2.5 rounded-full"
                     style={{ backgroundColor: item.color }}
                   />
-                  <span className="text-foreground">{item.category}</span>
+                  <span className="truncate text-foreground">{item.category}</span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-shrink-0 items-center gap-3">
                   <span className="text-muted-foreground">{item.percentage}%</span>
                   <span className="font-medium text-foreground">${item.amount.toFixed(2)}</span>
                 </div>

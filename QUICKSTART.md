@@ -29,6 +29,11 @@ SUPABASE_URL=your_supabase_url         # Required for Nessie customer mapping
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key  # Required for server-side Supabase access
 ```
 
+**Supabase Setup**: Run the SQL files in the Supabase SQL editor:
+
+- `supabase/nessie_customers.sql`
+- `supabase/dashboard_cache.sql`
+
 ### Step 2: Install Frontend Dependencies
 
 ```bash

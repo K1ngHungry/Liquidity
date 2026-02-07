@@ -90,6 +90,7 @@ class DashboardAccount(BaseModel):
 
 class DashboardDemoFlags(BaseModel):
     summary: bool
+    income: bool
     transactions: bool
     bills: bool
     deposits: bool

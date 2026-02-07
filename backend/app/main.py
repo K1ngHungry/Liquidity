@@ -2,6 +2,8 @@ from typing import Any
 from datetime import datetime
 import calendar
 import os
+import time
+import asyncio
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -38,6 +40,10 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Liquidity API", version="1.0.0")
 
+# Supabase dashboard cache refreshed by a background poller.
+dashboard_poll_interval = int(os.getenv("DASHBOARD_POLL_SECONDS", "120"))
+dashboard_cache_ttl = int(os.getenv("DASHBOARD_CACHE_TTL_SECONDS", "300"))
+
 budget_agent = BudgetAgent()
 
 # Configure CORS
@@ -60,6 +66,7 @@ async def startup_event():
         raise ValueError("NESSIE_API_KEY environment variable not set")
     nc_module.nessie_client = NessieClient(api_key=api_key)
     logger.info("Nessie client initialized")
+    asyncio.create_task(_dashboard_polling_loop())
 
 
 @app.on_event("shutdown")
@@ -167,6 +174,8 @@ def _build_dashboard_response(
     purchase_total = 0.0
 
     for purchase in purchases:
+        if purchase.get("status") == "cancelled":
+            continue
         amount = _safe_float(purchase.get("amount"))
         purchase_total += amount
         description = purchase.get("description") or "Purchase"
@@ -189,6 +198,34 @@ def _build_dashboard_response(
             )
         )
 
+    for deposit in deposits:
+        amount = _safe_float(deposit.get("amount"))
+        if amount == 0.0:
+            continue
+        description = deposit.get("description") or "Deposit"
+        merchant = str(deposit.get("payee_id") or description)
+        category = "Income"
+
+        deposit_date = deposit.get("transaction_date") or deposit.get("created_at") or deposit.get("date")
+        date_str = deposit_date if isinstance(deposit_date, str) else ""
+
+        transactions.append(
+            DashboardTransaction(
+                id=str(deposit.get("_id") or deposit.get("id") or ""),
+                date=date_str,
+                description=description,
+                amount=abs(amount),
+                category=category,
+                merchant=merchant,
+                type="credit",
+            )
+        )
+
+    transactions.sort(
+        key=lambda tx: _parse_date(tx.date) or datetime.min,
+        reverse=True,
+    )
+
     total_bills = sum(_safe_float(bill.get("payment_amount")) for bill in bills)
 
     now = datetime.utcnow()
@@ -196,6 +233,8 @@ def _build_dashboard_response(
     monthly_spending_map = {(y, m): total_bills for (y, m, _) in month_labels}
 
     for purchase in purchases:
+        if purchase.get("status") == "cancelled":
+            continue
         parsed = _parse_date(purchase.get("purchase_date") or purchase.get("created_at") or purchase.get("date"))
         if not parsed:
             continue
@@ -239,22 +278,27 @@ def _build_dashboard_response(
 
     current_month_key = (now.year, now.month)
     current_month_spending = monthly_spending_map.get(current_month_key, total_bills)
+    current_month_income = monthly_income_map.get(current_month_key, 0.0)
     prev_month_index = month_labels[-2] if len(month_labels) >= 2 else None
     prev_month_spending = monthly_spending_map.get((prev_month_index[0], prev_month_index[1]), total_bills) if prev_month_index else total_bills
     month_over_month = 0.0
     if prev_month_spending:
         month_over_month = ((current_month_spending - prev_month_spending) / prev_month_spending) * 100
+    savings_rate = 0.0
+    if current_month_income:
+        savings_rate = ((current_month_income - current_month_spending) / current_month_income) * 100
 
     summary = DashboardSummary(
         totalBalance=total_balance,
-        monthlyIncome=monthly_income_map.get(current_month_key, 0.0),
+        monthlyIncome=current_month_income,
         monthlyExpenses=current_month_spending,
-        savingsRate=0.0,
+        savingsRate=round(savings_rate, 1),
         monthOverMonth=round(month_over_month, 1),
     )
 
     demo_flags = DashboardDemoFlags(
         summary=len(accounts) == 0,
+        income=len(deposits) == 0,
         transactions=len(transactions) == 0,
         bills=len(bills) == 0,
         deposits=len(deposits) == 0,
@@ -282,6 +326,81 @@ def _build_dashboard_response(
         budgets=[],
         demoFlags=demo_flags,
     )
+
+
+async def _fetch_dashboard_for_customer(nessie_customer_id: str) -> DashboardResponse:
+    nessie = get_nessie_client()
+    accounts = await nessie.get_customer_accounts(nessie_customer_id)
+
+    purchases: list[dict[str, Any]] = []
+    bills: list[dict[str, Any]] = []
+    deposits: list[dict[str, Any]] = []
+
+    for account in accounts:
+        account_id = account.get("_id") or account.get("id")
+        if not account_id:
+            continue
+        try:
+            purchases.extend(await nessie.get_account_purchases(account_id))
+        except Exception as e:
+            logger.warning(f"Failed to fetch purchases for account {account_id}: {e}")
+        try:
+            bills.extend(await nessie.get_account_bills(account_id))
+        except Exception as e:
+            logger.warning(f"Failed to fetch bills for account {account_id}: {e}")
+        try:
+            deposits.extend(await nessie.get_account_deposits(account_id))
+        except Exception as e:
+            logger.warning(f"Failed to fetch deposits for account {account_id}: {e}")
+
+    hydrated_deposits: list[dict[str, Any]] = []
+    for deposit in deposits:
+        if deposit.get("amount") is not None:
+            hydrated_deposits.append(deposit)
+            continue
+        deposit_id = deposit.get("_id") or deposit.get("id")
+        if not deposit_id:
+            hydrated_deposits.append(deposit)
+            continue
+        try:
+            detail = await nessie.get_deposit(str(deposit_id))
+            hydrated_deposits.append({**deposit, **detail})
+        except Exception as e:
+            logger.warning(f"Failed to hydrate deposit {deposit_id}: {e}")
+            hydrated_deposits.append(deposit)
+
+    return _build_dashboard_response(accounts, purchases, bills, hydrated_deposits)
+
+
+async def _dashboard_polling_loop():
+    await asyncio.sleep(1)
+    while True:
+        try:
+            supabase = get_supabase_client()
+            response = supabase.table("nessie_customers").select("auth_user_id, nessie_customer_id").execute()
+            mappings = response.data or []
+            for mapping in mappings:
+                auth_user_id = mapping.get("auth_user_id")
+                nessie_customer_id = mapping.get("nessie_customer_id")
+                if not auth_user_id or not nessie_customer_id:
+                    continue
+                try:
+                    data = await _fetch_dashboard_for_customer(nessie_customer_id)
+                    supabase.table("dashboard_cache").upsert(
+                        {
+                            "auth_user_id": auth_user_id,
+                            "data": data.model_dump(),
+                            "fetched_at": datetime.utcnow().isoformat(),
+                            "fetched_at_epoch": int(time.time()),
+                        },
+                        on_conflict="auth_user_id",
+                    ).execute()
+                except Exception as e:
+                    logger.warning(f"Dashboard poll failed for user {auth_user_id}: {e}")
+        except Exception as e:
+            logger.error(f"Dashboard polling loop error: {e}")
+
+        await asyncio.sleep(dashboard_poll_interval)
 
 
 # Nessie API endpoints
@@ -379,10 +498,23 @@ async def optimize_current_user_liquidity(
 
 
 @app.get("/api/nessie/dashboard", response_model=DashboardResponse)
-async def get_dashboard_data(auth_user_id: str = Depends(require_auth_user_id)):
+async def get_dashboard_data(auth_user_id: str = Depends(require_auth_user_id), refresh: bool = False):
     """Fetch Nessie accounts, purchases, and bills for dashboard data."""
     try:
         supabase = get_supabase_client()
+        if not refresh:
+            cached = (
+                supabase.table("dashboard_cache")
+                .select("data, fetched_at_epoch")
+                .eq("auth_user_id", auth_user_id)
+                .execute()
+            )
+            if cached.data:
+                row = cached.data[0]
+                fetched_at_epoch = int(row.get("fetched_at_epoch") or 0)
+                if fetched_at_epoch and (time.time() - fetched_at_epoch) < dashboard_cache_ttl:
+                    return row["data"]
+
         response = (
             supabase.table("nessie_customers")
             .select("nessie_customer_id")
@@ -393,32 +525,17 @@ async def get_dashboard_data(auth_user_id: str = Depends(require_auth_user_id)):
             raise HTTPException(status_code=404, detail="Nessie customer not linked")
 
         nessie_customer_id = response.data[0]["nessie_customer_id"]
-
-        nessie = get_nessie_client()
-        accounts = await nessie.get_customer_accounts(nessie_customer_id)
-
-        purchases: list[dict[str, Any]] = []
-        bills: list[dict[str, Any]] = []
-        deposits: list[dict[str, Any]] = []
-
-        for account in accounts:
-            account_id = account.get("_id") or account.get("id")
-            if not account_id:
-                continue
-            try:
-                purchases.extend(await nessie.get_account_purchases(account_id))
-            except Exception as e:
-                logger.warning(f"Failed to fetch purchases for account {account_id}: {e}")
-            try:
-                bills.extend(await nessie.get_account_bills(account_id))
-            except Exception as e:
-                logger.warning(f"Failed to fetch bills for account {account_id}: {e}")
-            try:
-                deposits.extend(await nessie.get_account_deposits(account_id))
-            except Exception as e:
-                logger.warning(f"Failed to fetch deposits for account {account_id}: {e}")
-
-        return _build_dashboard_response(accounts, purchases, bills, deposits)
+        data = await _fetch_dashboard_for_customer(nessie_customer_id)
+        supabase.table("dashboard_cache").upsert(
+            {
+                "auth_user_id": auth_user_id,
+                "data": data.model_dump(),
+                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at_epoch": int(time.time()),
+            },
+            on_conflict="auth_user_id",
+        ).execute()
+        return data
     except HTTPException:
         raise
     except Exception as e:

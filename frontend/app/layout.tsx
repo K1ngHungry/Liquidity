@@ -29,7 +29,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="font-sans antialiased">
+      <body className="font-sans antialiased" suppressHydrationWarning>
         <div className="flex min-h-screen">
           <AppSidebar />
           <main className="ml-64 flex-1 p-6 lg:p-8">

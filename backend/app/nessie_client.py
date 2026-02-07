@@ -76,6 +76,13 @@ class NessieClient:
         response.raise_for_status()
         return response.json()
 
+    async def get_deposit(self, deposit_id: str) -> Dict:
+        """Get a specific deposit by id."""
+        url = self._build_url(f"deposits/{deposit_id}")
+        response = await self.client.get(url)
+        response.raise_for_status()
+        return response.json()
+
     async def close(self):
         """Close HTTP client."""
         await self.client.aclose()

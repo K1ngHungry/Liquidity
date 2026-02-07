@@ -162,6 +162,13 @@ SUPABASE_URL=your_supabase_url
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ```
 
+### Supabase SQL
+
+Run these in the Supabase SQL editor:
+
+- `supabase/nessie_customers.sql`
+- `supabase/dashboard_cache.sql`
+
 ### Frontend (.env.local)
 
 ```env
