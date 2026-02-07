@@ -4,7 +4,7 @@ import { getTransactions, CATEGORY_COLORS } from "@/lib/data"
 import type { DashboardTransaction } from "@/lib/api"
 
 export function RecentTransactions({ transactions }: { transactions?: DashboardTransaction[] }) {
-  const resolved = (transactions && transactions.length > 0 ? transactions : getTransactions()).slice(0, 8)
+  const resolved = (transactions && transactions.length > 0 ? transactions : getTransactions()).filter((tx) => tx.status !== "cancelled").slice(0, 8)
 
   return (
     <Card className="border-border bg-card">

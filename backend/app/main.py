@@ -173,6 +173,8 @@ def _build_dashboard_response(
     purchase_total = 0.0
 
     for purchase in purchases:
+        if purchase.get("status") == "cancelled":
+            continue
         amount = _safe_float(purchase.get("amount"))
         purchase_total += amount
         description = purchase.get("description") or "Purchase"
@@ -192,6 +194,7 @@ def _build_dashboard_response(
                 category=category,
                 merchant=merchant,
                 type="debit",
+                status=str(purchase.get("status") or "posted"),
             )
         )
 
@@ -202,6 +205,8 @@ def _build_dashboard_response(
     monthly_spending_map = {(y, m): total_bills for (y, m, _) in month_labels}
 
     for purchase in purchases:
+        if purchase.get("status") == "cancelled":
+            continue
         parsed = _parse_date(purchase.get("purchase_date") or purchase.get("created_at") or purchase.get("date"))
         if not parsed:
             continue

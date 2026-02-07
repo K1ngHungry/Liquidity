@@ -79,6 +79,7 @@ export interface DashboardTransaction {
   category: string;
   merchant: string;
   type: "debit" | "credit";
+  status: string;
 }
 
 export interface DashboardBudget {

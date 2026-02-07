@@ -88,6 +88,7 @@ class DashboardTransaction(BaseModel):
     category: str
     merchant: str
     type: str
+    status: str
 
 
 class DashboardBudget(BaseModel):

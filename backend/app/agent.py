@@ -277,7 +277,7 @@ class BudgetAgent:
         messages.append({"role": "user", "content": user_message})
 
         logger.info("Sending %d messages to Dedalus runner", len(messages))
-        logger.info("Available tools: %s", [create_constraint_problem.__name__, add_user_constraint.__name__])
+        logger.info("Available tools: %s", [add_user_constraint.__name__])
 
         # The DedalusRunner handles the full tool-calling loop automatically:
         # it calls the model, executes any tool the model invokes, feeds the
@@ -285,7 +285,7 @@ class BudgetAgent:
         result = await self.runner.run(
             messages=messages,
             model=self.model,
-            tools=[create_constraint_problem, add_user_constraint],
+            tools=[add_user_constraint],
         )
 
         logger.info("New constraints after run: %s", _ctx_new_constraints.get())
