@@ -130,25 +130,9 @@ export default function DashboardPage() {
     )
   }
 
-  if (!nessieMapping && !mappingLoading) {
-    return (
-      <div className="flex flex-col gap-6 items-center justify-center min-h-[60vh]">
-        <div className="text-center space-y-2 mb-8">
-          <h1 className="text-3xl font-bold text-foreground">Welcome to Liquidity</h1>
-          <p className="text-muted-foreground max-w-md mx-auto">
-            Connect your bank account to start optimizing your liquidity and achieving your financial goals.
-          </p>
-        </div>
-        <UserRegistrationForm
-          accessToken={session.access_token}
-          onRegisterSuccess={handleRegisterSuccess}
-        />
-        <Button variant="outline" onClick={handleSignOut} className="mt-4">
-          Sign Out
-        </Button>
-      </div>
-    )
-  }
+  // REMOVED: Blocking UserRegistrationForm
+  // We now allow the dashboard to render even if nessieMapping is null.
+  // The dashboard will show demo data (handled by demoFallback logic below).
 
   if (dashboardLoading) {
     return (
@@ -195,7 +179,9 @@ export default function DashboardPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base text-amber-200">Using Demo Data</CardTitle>
             <CardDescription className="text-amber-100/80">
-              Some Nessie data is unavailable. The dashboard is showing demo values where needed.
+              {!nessieMapping 
+                ? "Connect a bank account to see your real data." 
+                : "Some Nessie data is unavailable. The dashboard is showing demo values where needed."}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -208,7 +194,12 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={handleOptimize} disabled={isOptimizing} className="gap-2">
+          <Button 
+            onClick={handleOptimize} 
+            disabled={isOptimizing || !nessieMapping} 
+            className="gap-2"
+            title={!nessieMapping ? "Connect a bank account to optimize" : "Optimize Budget"}
+          >
             {isOptimizing ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (

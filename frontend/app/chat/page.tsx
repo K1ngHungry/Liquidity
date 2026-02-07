@@ -17,6 +17,18 @@ interface ChatMessage {
   content: string
 }
 
+/** Turn an arbitrary string into a valid solver identifier (lowercase, underscores). */
+function sanitizeCategory(raw: string): string {
+  let name = raw
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_]/g, "_") // replace non-alphanumeric
+    .replace(/_+/g, "_")         // collapse multiple underscores
+    .replace(/^_|_$/g, "")       // trim leading/trailing underscores
+  if (name && /^[0-9]/.test(name)) name = `cat_${name}`
+  return name || "category"
+}
+
 export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState("")
@@ -84,6 +96,40 @@ export default function ChatPage() {
 
       try {
         const dashboard = await apiClient.getNessieDashboard(session.access_token)
+
+        // 1. Compute baseline (Current Budget) from dashboard data
+        const baselineSolution: Record<string, number> = {}
+
+        // Add bills as fixed costs
+        if (dashboard.bills) {
+          dashboard.bills.forEach((bill, idx) => {
+               const b = bill as any
+               const payee = String(b.payee || b.nickname || `bill_${idx+1}`)
+               const amount = Math.round(Number(b.payment_amount || 0))
+               if (amount > 0) {
+                   const cat = sanitizeCategory(payee)
+                   baselineSolution[cat] = (baselineSolution[cat] || 0) + amount
+               }
+          })
+        }
+
+        // Add spending from categories
+        if (dashboard.categoryBreakdown) {
+          dashboard.categoryBreakdown.forEach(cat => {
+              const name = sanitizeCategory(cat.category)
+              const amount = Math.round(cat.amount)
+              baselineSolution[name] = Math.max(baselineSolution[name] || 0, amount) 
+          })
+        }
+        
+        // Set this as the fixed "Previous Result" for comparison
+        setPreviousResult({
+            status: "CURRENT",
+            solution: baselineSolution,
+            satisfied_constraints: [],
+            dropped_constraints: []
+        })
+
         const nessieConstraints: UserConstraint[] = []
 
         // Bills → hard constraints (recurring expenses you must pay)
@@ -95,7 +141,7 @@ export default function ChatPage() {
 
             nessieConstraints.push({
               id: `nessie-bill-${idx}`,
-              category: payee.toLowerCase().replace(/\s+/g, "_"),
+              category: sanitizeCategory(payee),
               operator: "==" as const,
               amount,
               constraint_type: "hard" as const,
@@ -109,7 +155,10 @@ export default function ChatPage() {
         // Deposits → income ceiling + savings goal
         if (dashboard.deposits && dashboard.deposits.length > 0) {
           const totalIncome = dashboard.deposits.reduce(
-            (sum, dep) => sum + Math.round(Number(dep.amount || 0)),
+            (sum: number, dep) => {
+                const d = dep as any
+                return sum + Math.round(Number(d.amount || 0))
+            },
             0,
           )
 
@@ -175,6 +224,7 @@ export default function ChatPage() {
       const res: AgentResponse = await apiClient.agentSolve({
         message: text,
         conversation_history: conversation,
+        user_constraints: constraints.length > 0 ? constraints : undefined,
       })
 
       if (res.solver_input) {
@@ -241,6 +291,32 @@ export default function ChatPage() {
     sendMessage(question)
   }
 
+  const handleOptimize = async () => {
+    if (loading || constraints.length === 0) return
+    setLoading(true)
+
+    try {
+      const res: AgentResponse = await apiClient.directSolve({
+        constraints,
+      })
+
+      if (res.solver_result) {
+        console.log("[Direct Solve Result]", res.solver_result)
+        setCurrentResult(res.solver_result)
+        setCurrentRecommendations(res.recommendations)
+        
+        // Keep previousResult fixed as baseline
+        if (!previousResult) {
+             setPreviousResult(res.solver_result)
+        }
+      }
+    } catch (err) {
+      console.error("Direct solve failed:", err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const direction = isSmallScreen ? "vertical" : "horizontal"
 
   return (
@@ -272,6 +348,8 @@ export default function ChatPage() {
             constraints={constraints}
             categories={categories}
             onConstraintsChange={setConstraints}
+            onOptimize={handleOptimize}
+            optimizing={loading}
           />
         </ResizablePanel>
 

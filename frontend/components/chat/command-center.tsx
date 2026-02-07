@@ -25,6 +25,8 @@ interface CommandCenterProps {
   constraints: UserConstraint[]
   categories: string[]
   onConstraintsChange: (constraints: UserConstraint[]) => void
+  onOptimize: () => void
+  optimizing: boolean
 }
 
 // Map between API UserConstraint and Editor UserConstraint (camelCase)
@@ -55,6 +57,8 @@ export function CommandCenter({
   constraints,
   categories,
   onConstraintsChange,
+  onOptimize,
+  optimizing,
 }: CommandCenterProps) {
   const hasResult = currentResult !== null
   const hasComparison = currentResult !== null && previousResult !== null
@@ -103,6 +107,8 @@ export function CommandCenter({
               constraints={constraints.map(toEditorConstraint)}
               categories={categories}
               onConstraintsChange={handleConstraintsChange}
+              onOptimize={onOptimize}
+              optimizing={optimizing}
             />
           </TabsContent>
 
