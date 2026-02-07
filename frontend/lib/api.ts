@@ -68,10 +68,20 @@ export interface AgentRequest {
   conversation_history: Record<string, unknown>[];
 }
 
+export interface Recommendation {
+  label: string;
+  value: string;
+  threshold: string;
+  status: "good" | "warning" | "critical";
+  detail: string;
+}
+
 export interface AgentResponse {
   type: "question" | "solution";
   content: string;
   solver_result: Record<string, unknown> | null;
+  solver_input: Record<string, unknown> | null;
+  recommendations: Recommendation[];
   conversation: Record<string, unknown>[];
 }
 
