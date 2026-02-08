@@ -100,7 +100,7 @@ export function CopilotChat({
                   className={`rounded-lg px-4 py-3 text-sm leading-relaxed shadow-sm ${
                     message.role === "user"
                       ? "bg-primary text-primary-foreground max-w-[80%]"
-                      : "bg-secondary text-foreground w-full"
+                      : "bg-secondary text-white w-full"
                   }`}
                 >
                   <div className="whitespace-pre-wrap">{message.content}</div>
